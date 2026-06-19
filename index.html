@@ -14,7 +14,36 @@
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="admin-dashboard.css">
-  
+
+  <!-- PWA: Manifest -->
+  <link rel="manifest" href="admin-manifest.json">
+  <meta name="theme-color" content="#2563eb">
+
+  <!-- PWA: Icons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="admin-icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="admin-icon-512.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="admin-icon-192.png">
+
+  <!-- PWA: iOS standalone -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Lender Admin">
+
+  <style>
+    #install-hint {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 16px;
+      font-size: 0.875rem;
+      color: #6b7280;
+    }
+    #install-hint svg { width: 16px; height: 16px; stroke: #2563eb; }
+    #install-link { color: #2563eb; font-weight: 600; text-decoration: none; }
+    #install-link:hover { text-decoration: underline; }
+  </style>
+
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -54,6 +83,11 @@
           <span>Sign In as Admin</span>
           <i data-lucide="arrow-right"></i>
         </button>
+
+        <div class="auth-install-hint" id="install-hint">
+          <i data-lucide="download"></i>
+          <a href="#" id="install-link">Download App</a>
+        </div>
 
         <div class="demo-credentials-box admin-box">
           <div class="demo-title text-primary">
@@ -727,5 +761,40 @@
   </div>
 
   <script type="module" src="admin-dashboard.js"></script>
+
+  <!-- PWA: Service Worker + Install Prompt -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('admin-service-worker.js')
+          .then(r => console.log('[PWA] Admin SW registered:', r.scope))
+          .catch(e => console.error('[PWA] Admin SW failed:', e));
+      });
+    }
+
+    let deferredPrompt;
+    const installHint = document.getElementById('install-hint');
+    const installLink = document.getElementById('install-link');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installHint.style.display = 'flex';
+    });
+
+    installLink.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installHint.style.display = 'none';
+    });
+
+    window.addEventListener('appinstalled', () => {
+      installHint.style.display = 'none';
+      deferredPrompt = null;
+    });
+  </script>
 </body>
 </html>
