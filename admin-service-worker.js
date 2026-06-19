@@ -1,12 +1,12 @@
 const CACHE = 'admin-v1';
 const SHELL = [
-  './',
-  './admin-dashboard.html',
-  './admin-dashboard.css',
-  './admin-dashboard.js',
-  './admin-manifest.json',
-  './admin-icon-192.png',
-  './admin-icon-512.png'
+  '/lenderappadmin/',
+  '/lenderappadmin/index.html',
+  '/lenderappadmin/admin-dashboard.css',
+  '/lenderappadmin/admin-dashboard.js',
+  '/lenderappadmin/admin-manifest.json',
+  '/lenderappadmin/admin-icon-192.png',
+  '/lenderappadmin/admin-icon-512.png'
 ];
 
 self.addEventListener('install', e => {

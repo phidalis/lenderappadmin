@@ -1,10 +1,10 @@
 {
-  "id": "/admin",
+  "id": "/lenderappadmin/",
   "name": "Admin",
   "short_name": "Admin",
   "description": "Professional administrative loan management dashboard. Register clients, disburse loans, record collections and view ledger sheets.",
-  "start_url": "/admin-dashboard.html",
-  "scope": "/",
+  "start_url": "/lenderappadmin/",
+  "scope": "/lenderappadmin/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#ffffff",
