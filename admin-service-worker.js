@@ -1,12 +1,16 @@
-const CACHE = 'admin-v1';
+// Unique cache key — scoped to this app only, won't clash with other PWAs
+const CACHE = 'lender-admin-shell-v1';
+
+// All paths are relative to the SW scope so they resolve correctly
+// regardless of which GitHub Pages subdirectory this app lives in.
 const SHELL = [
-  '/lenderappadmin/',
-  '/lenderappadmin/index.html',
-  '/lenderappadmin/admin-dashboard.css',
-  '/lenderappadmin/admin-dashboard.js',
-  '/lenderappadmin/admin-manifest.json',
-  '/lenderappadmin/admin-icon-192.png',
-  '/lenderappadmin/admin-icon-512.png'
+  './',
+  './index.html',
+  './admin-dashboard.css',
+  './admin-dashboard.js',
+  './admin-manifest.json',
+  './admin-icon-192.png',
+  './admin-icon-512.png'
 ];
 
 self.addEventListener('install', e => {
