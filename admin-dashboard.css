@@ -1792,6 +1792,221 @@ select:focus {
   height: 18px;
 }
 
+/* ==========================================================================
+   SETTINGS SECTION (Appearance / Backup & Restore / Admin Users)
+   ========================================================================== */
+.settings-overlay {
+  padding: 0;
+}
+
+.settings-modal-card {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  border-radius: 0;
+  border: none;
+  padding: 0;
+  align-items: stretch;
+  text-align: left;
+  gap: 0;
+  animation: fadeInModal 0.2s ease-out forwards;
+}
+
+.settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 24px 20px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.settings-close-btn {
+  background: none;
+  border: 1.5px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.settings-close-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+}
+
+.settings-close-btn i {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.settings-footer {
+  flex-shrink: 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 0;
+}
+
+.settings-footer > * {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.settings-tabs {
+  display: flex;
+  background-color: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  gap: 4px;
+}
+
+.settings-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 10px 6px;
+  border-radius: calc(var(--radius-md) - 4px);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.settings-tab i {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-tab.active {
+  background-color: var(--bg-primary);
+  color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-tab-panel {
+  display: none;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 20px;
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.settings-tab-panel.active {
+  display: flex;
+}
+
+.theme-btn span {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.backup-info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(var(--primary-rgb, 37, 99, 235), 0.06);
+  border: 1px solid rgba(var(--primary-rgb, 37, 99, 235), 0.18);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.backup-info-box i {
+  color: var(--primary-color);
+  margin-top: 2px;
+}
+
+.admin-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-secondary);
+  margin-bottom: 8px;
+}
+
+.admin-list-item:last-child {
+  margin-bottom: 0;
+}
+
+.admin-list-item .admin-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-list-item .admin-meta strong {
+  font-size: var(--fs-sm);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-list-item .admin-meta span {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-list-item .admin-remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.admin-list-item .admin-remove-btn:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.admin-list-item .admin-remove-btn i {
+  width: 16px;
+  height: 16px;
+}
+
 /* Admin welcome banner override */
 .admin-banner {
   background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;

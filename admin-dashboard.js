@@ -12,12 +12,13 @@
 //   loanTypes/{ltId}      – loan product definitions
 //   loanApplications/{id} – client applications
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
   getAuth,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  createUserWithEmailAndPassword
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   getFirestore,
@@ -115,8 +116,27 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('admin-settings-trigger')?.addEventListener('click', openGlobalSettings);
   document.getElementById('btn-close-global-settings')?.addEventListener('click', () => {
     document.getElementById('global-settings-modal').style.display = 'none';
-    showToast('Style changes applied successfully.', 'success');
   });
+  document.getElementById('btn-close-global-settings-x')?.addEventListener('click', () => {
+    document.getElementById('global-settings-modal').style.display = 'none';
+  });
+
+  // Settings tabs (Appearance / Backup / Admins)
+  wireSettingsTabs();
+
+  // Backup & Restore
+  document.getElementById('btn-download-backup')?.addEventListener('click', downloadBackup);
+  document.getElementById('btn-restore-backup')?.addEventListener('click', () => {
+    document.getElementById('backup-restore-input')?.click();
+  });
+  document.getElementById('backup-restore-input')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) restoreFromBackup(file);
+    e.target.value = '';
+  });
+
+  // Admin Users
+  wireCreateAdminForm();
 
   // Toggle password visibility
   document.querySelectorAll('.toggle-pin-visibility').forEach(btn => {
@@ -517,6 +537,248 @@ function openGlobalSettings() {
     b.classList.toggle('active', b.getAttribute('data-scale') === cache.settings.scale)
   );
   modal.style.display = 'flex';
+  renderAdminUsersList();
+}
+
+function wireSettingsTabs() {
+  document.querySelectorAll('.settings-tab').forEach(tabBtn => {
+    tabBtn.addEventListener('click', () => {
+      const target = tabBtn.getAttribute('data-settings-tab');
+
+      document.querySelectorAll('.settings-tab').forEach(b => b.classList.remove('active'));
+      tabBtn.classList.add('active');
+
+      document.querySelectorAll('.settings-tab-panel').forEach(panel => panel.classList.remove('active'));
+      document.getElementById(`settings-tab-${target}`)?.classList.add('active');
+
+      if (target === 'admins') renderAdminUsersList();
+    });
+  });
+}
+
+
+// =============================================================================
+// BACKUP & RESTORE  (full Firestore data export/import as JSON)
+// =============================================================================
+function todayDateStamp() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+async function downloadBackup() {
+  const btn = document.getElementById('btn-download-backup');
+  const statusEl = document.getElementById('backup-download-status');
+  if (btn) { btn.disabled = true; btn.querySelector('span').textContent = 'Preparing backup…'; }
+  if (statusEl) statusEl.textContent = '';
+
+  try {
+    // Admins aren't kept in the live cache, so fetch fresh for the export
+    const adminSnap = await getDocs(adminsCol);
+    const admins = adminSnap.docs.map(d => ({ ...d.data(), _docId: d.id }));
+
+    const backupPayload = {
+      meta: {
+        app: 'LenderApp Admin Portal',
+        exportedAt: new Date().toISOString(),
+        version: 1
+      },
+      users:            cache.users,
+      loans:            cache.loans,
+      repayments:       cache.repayments,
+      loanTypes:        cache.loanTypes,
+      loanApplications: cache.loanApplications,
+      admins
+    };
+
+    const blob = new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `lenderapp-backup-${todayDateStamp()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    if (statusEl) statusEl.textContent = `Backup downloaded: lenderapp-backup-${todayDateStamp()}.json`;
+    showToast('Backup downloaded successfully.', 'success');
+  } catch (err) {
+    if (statusEl) statusEl.textContent = 'Backup failed. See error toast.';
+    showToast('Error creating backup: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.querySelector('span').textContent = 'Download Backup (JSON)'; }
+  }
+}
+
+async function restoreFromBackup(file) {
+  const statusEl = document.getElementById('backup-restore-status');
+  const btn = document.getElementById('btn-restore-backup');
+
+  let parsed;
+  try {
+    const text = await file.text();
+    parsed = JSON.parse(text);
+  } catch (err) {
+    showToast('Invalid backup file: could not parse JSON.', 'error');
+    return;
+  }
+
+  const collectionsMap = {
+    users:            usersCol,
+    loans:            loansCol,
+    repayments:       repaymentsCol,
+    loanTypes:        loanTypesCol,
+    loanApplications: loanAppsCol
+  };
+
+  const summary = Object.keys(collectionsMap)
+    .map(k => `${(parsed[k] || []).length} ${k}`)
+    .join(', ');
+
+  const confirmed = window.confirm(
+    `This will overwrite existing data with the contents of "${file.name}" (${summary}). This cannot be undone. Continue?`
+  );
+  if (!confirmed) return;
+
+  if (btn) { btn.disabled = true; btn.querySelector('span').textContent = 'Restoring…'; }
+  if (statusEl) statusEl.textContent = 'Restoring backup, please wait…';
+
+  try {
+    for (const [key, colRef] of Object.entries(collectionsMap)) {
+      const records = Array.isArray(parsed[key]) ? parsed[key] : [];
+      // Chunk into batches of 450 to stay safely under Firestore's 500-op batch limit
+      for (let i = 0; i < records.length; i += 450) {
+        const chunk = records.slice(i, i + 450);
+        const batch = writeBatch(db);
+        chunk.forEach(record => {
+          const { _docId, ...data } = record;
+          const docId = _docId || (colRef === usersCol ? data.id : undefined);
+          const ref = docId ? doc(colRef, docId) : doc(colRef);
+          batch.set(ref, data);
+        });
+        await batch.commit();
+      }
+    }
+
+    if (statusEl) statusEl.textContent = `Restore complete (${summary}).`;
+    showToast('Backup restored successfully.', 'success');
+  } catch (err) {
+    if (statusEl) statusEl.textContent = 'Restore failed. See error toast.';
+    showToast('Error restoring backup: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.querySelector('span').textContent = 'Choose Backup File & Restore'; }
+  }
+}
+
+
+// =============================================================================
+// ADMIN USERS  (create new administrators + list existing ones)
+// =============================================================================
+async function renderAdminUsersList() {
+  const listEl = document.getElementById('admin-users-list');
+  if (!listEl) return;
+
+  try {
+    const snap = await getDocs(adminsCol);
+    if (snap.empty) {
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <i data-lucide="users"></i>
+          <p>No administrators found.</p>
+        </div>`;
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      return;
+    }
+
+    listEl.innerHTML = snap.docs.map(d => {
+      const a = d.data();
+      const isSelf = auth.currentUser && auth.currentUser.uid === d.id;
+      return `
+        <div class="admin-list-item">
+          <div class="admin-meta">
+            <strong>${a.displayName || 'Unnamed Admin'}${isSelf ? ' (You)' : ''}</strong>
+            <span>${a.email || ''} · Added ${formatDate(a.createdAt)}</span>
+          </div>
+          ${isSelf ? '' : `
+          <button type="button" class="admin-remove-btn" data-remove-admin="${d.id}" title="Remove Admin">
+            <i data-lucide="trash-2"></i>
+          </button>`}
+        </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('[data-remove-admin]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const uid = btn.getAttribute('data-remove-admin');
+        const confirmed = window.confirm('Remove this administrator\'s access? Their Firestore profile will be deleted (their login will need to be disabled separately in Firebase Auth).');
+        if (!confirmed) return;
+        try {
+          await deleteDoc(doc(db, 'admins', uid));
+          showToast('Administrator removed.', 'success');
+          renderAdminUsersList();
+        } catch (err) {
+          showToast('Error removing administrator: ' + err.message, 'error');
+        }
+      });
+    });
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  } catch (err) {
+    listEl.innerHTML = `
+      <div class="empty-state">
+        <i data-lucide="alert-triangle"></i>
+        <p>Could not load administrators.</p>
+      </div>`;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+}
+
+function wireCreateAdminForm() {
+  const form = document.getElementById('admin-create-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const displayName = document.getElementById('new-admin-name').value.trim();
+    const email       = document.getElementById('new-admin-email').value.trim();
+    const password    = document.getElementById('new-admin-password').value;
+
+    if (password.length < 6) {
+      showToast('Password must be at least 6 characters.', 'error');
+      return;
+    }
+
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'Creating…';
+
+    // Use a secondary Firebase app instance so creating the new admin
+    // does not sign the current admin out of their own session.
+    const secondaryApp = initializeApp(firebaseConfig, `Secondary-${Date.now()}`);
+    const secondaryAuth = getAuth(secondaryApp);
+
+    try {
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      await setDoc(doc(db, 'admins', cred.user.uid), {
+        email,
+        displayName: displayName || email,
+        createdAt: serverTimestamp()
+      });
+
+      showToast(`Administrator "${displayName || email}" created successfully.`, 'success');
+      form.reset();
+      renderAdminUsersList();
+    } catch (err) {
+      showToast('Error creating administrator: ' + err.message, 'error');
+    } finally {
+      await signOut(secondaryAuth).catch(() => {});
+      await deleteApp(secondaryApp).catch(() => {});
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Create New Admin';
+    }
+  });
 }
 
 
