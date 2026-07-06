@@ -5,7 +5,10 @@
 
 // ── Firebase SDK (v9 compat shim via CDN — loaded in HTML before this script) ──
 // Collection schema:
-//   admins/{uid}          – admin profile { email, displayName, createdAt }
+//   admins/{uid}          – admin profile { email, displayName, role: 'superadmin'|'admin', createdAt }
+//   meta/adminBootstrap   – one-time sentinel { initialized: true, initializedAt, by } written
+//                           alongside the very first (superadmin) admin doc; gates further
+//                           first-run setup attempts once it exists.
 //   users/{userId}        – client accounts { name, phone, nationalId, pin, limit, dateAdded }
 //   loans/{loanId}        – loan records
 //   repayments/{repId}    – repayment logs
@@ -61,6 +64,7 @@ const repaymentsCol   = collection(db, 'repayments');
 const loanTypesCol    = collection(db, 'loanTypes');
 const loanAppsCol     = collection(db, 'loanApplications');
 const adminsCol       = collection(db, 'admins');
+const bootstrapRef    = doc(db, 'meta', 'adminBootstrap');
 
 // ── In-memory cache (refreshed from Firestore on each view switch) ────────────
 const cache = {
@@ -69,6 +73,7 @@ const cache = {
   repayments:       [],
   loanTypes:        [],
   loanApplications: [],
+  currentAdmin:     null, // { uid, email, displayName, role } for the signed-in admin
   settings: { theme: 'light', font: 'sans', scale: 'medium' }
 };
 
@@ -83,7 +88,7 @@ let hasInitializedOverdueTracking = false;
 // =============================================================================
 // DOMContentLoaded
 // =============================================================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
 
@@ -97,6 +102,29 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTheme(cache.settings.theme || 'light', true);
   applyFont(cache.settings.font || 'sans');
   applyScale(cache.settings.scale || 'medium');
+
+  // ── First-run check: no administrators exist yet ─────────────────────────────
+  // A dedicated /meta/adminBootstrap doc is the source of truth (Firestore rules
+  // can't cheaply check "is this collection empty?", so we use a sentinel doc that
+  // gets created atomically alongside the very first admin doc).
+  let needsSetup = false;
+  try {
+    const bootstrapSnap = await getDoc(bootstrapRef);
+    needsSetup = !bootstrapSnap.exists();
+  } catch (err) {
+    // Fail safe: if this read errors out for any reason, fall through to the
+    // normal login screen rather than trapping the user on a blank page.
+    needsSetup = false;
+  }
+
+  if (needsSetup) {
+    document.getElementById('auth-container')?.classList.remove('active');
+    document.getElementById('admin-container')?.classList.remove('active');
+    document.getElementById('setup-container')?.classList.add('active');
+    wireSetupForm();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    return; // Skip the rest of the app wiring until setup completes (page reloads after).
+  }
 
   // ── Wire UI controls ─────────────────────────────────────────────────────────
   document.querySelectorAll('[data-set-theme]').forEach(btn => {
@@ -205,8 +233,11 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoginScreen();
         return;
       }
+      cache.currentAdmin = { uid: user.uid, ...adminSnap.data() };
+      applyAdminUiPermissions();
       showAdminPortal();
     } else {
+      cache.currentAdmin = null;
       showLoginScreen();
     }
   });
@@ -537,6 +568,7 @@ function openGlobalSettings() {
     b.classList.toggle('active', b.getAttribute('data-scale') === cache.settings.scale)
   );
   modal.style.display = 'flex';
+  applyAdminUiPermissions();
   renderAdminUsersList();
 }
 
@@ -677,9 +709,23 @@ async function restoreFromBackup(file) {
 // =============================================================================
 // ADMIN USERS  (create new administrators + list existing ones)
 // =============================================================================
+
+// Show/hide the "Create New Admin" form based on the signed-in admin's role.
+// Only the Super Admin may create (or remove) other administrators; this is a
+// UI-level convenience — the real enforcement lives in the Firestore rules.
+function applyAdminUiPermissions() {
+  const isSuper = cache.currentAdmin?.role === 'superadmin';
+  const createForm = document.getElementById('admin-create-form');
+  const restrictedNotice = document.getElementById('admin-create-restricted-notice');
+  if (createForm) createForm.style.display = isSuper ? 'flex' : 'none';
+  if (restrictedNotice) restrictedNotice.style.display = isSuper ? 'none' : 'flex';
+}
+
 async function renderAdminUsersList() {
   const listEl = document.getElementById('admin-users-list');
   if (!listEl) return;
+
+  const isSuper = cache.currentAdmin?.role === 'superadmin';
 
   try {
     const snap = await getDocs(adminsCol);
@@ -696,16 +742,22 @@ async function renderAdminUsersList() {
     listEl.innerHTML = snap.docs.map(d => {
       const a = d.data();
       const isSelf = auth.currentUser && auth.currentUser.uid === d.id;
+      const isTargetSuper = a.role === 'superadmin';
+      const roleLabel = isTargetSuper ? 'Super Admin' : 'Admin';
+      // Only the Super Admin can remove anyone, and the Super Admin account
+      // itself can never be removed through this UI.
+      const canRemove = isSuper && !isSelf && !isTargetSuper;
+
       return `
         <div class="admin-list-item">
           <div class="admin-meta">
-            <strong>${a.displayName || 'Unnamed Admin'}${isSelf ? ' (You)' : ''}</strong>
+            <strong>${a.displayName || 'Unnamed Admin'}${isSelf ? ' (You)' : ''}<span class="admin-role-badge${isTargetSuper ? ' superadmin' : ''}">${roleLabel}</span></strong>
             <span>${a.email || ''} · Added ${formatDate(a.createdAt)}</span>
           </div>
-          ${isSelf ? '' : `
+          ${canRemove ? `
           <button type="button" class="admin-remove-btn" data-remove-admin="${d.id}" title="Remove Admin">
             <i data-lucide="trash-2"></i>
-          </button>`}
+          </button>` : ''}
         </div>`;
     }).join('');
 
@@ -741,6 +793,14 @@ function wireCreateAdminForm() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    // Client-side guard (the Firestore rules are the real gate, but this avoids
+    // a confusing round-trip if the form was somehow triggered by a non-super admin).
+    if (cache.currentAdmin?.role !== 'superadmin') {
+      showToast('Only the Super Admin can create new administrators.', 'error');
+      return;
+    }
+
     const displayName = document.getElementById('new-admin-name').value.trim();
     const email       = document.getElementById('new-admin-email').value.trim();
     const password    = document.getElementById('new-admin-password').value;
@@ -764,6 +824,7 @@ function wireCreateAdminForm() {
       await setDoc(doc(db, 'admins', cred.user.uid), {
         email,
         displayName: displayName || email,
+        role: 'admin', // Only the bootstrap flow can create a 'superadmin'
         createdAt: serverTimestamp()
       });
 
@@ -777,6 +838,67 @@ function wireCreateAdminForm() {
       await deleteApp(secondaryApp).catch(() => {});
       btn.disabled = false;
       btn.querySelector('span').textContent = 'Create New Admin';
+    }
+  });
+}
+
+
+// =============================================================================
+// FIRST-RUN SETUP  (creates the one-time Super Admin, before any admin exists)
+// =============================================================================
+function wireSetupForm() {
+  const form = document.getElementById('setup-admin-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const displayName     = document.getElementById('setup-admin-name').value.trim();
+    const email           = document.getElementById('setup-admin-email').value.trim();
+    const password        = document.getElementById('setup-admin-password').value;
+    const passwordConfirm = document.getElementById('setup-admin-password-confirm').value;
+
+    if (password.length < 6) {
+      showToast('Password must be at least 6 characters.', 'error');
+      return;
+    }
+    if (password !== passwordConfirm) {
+      showToast('Passwords do not match.', 'error');
+      return;
+    }
+
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'Creating Super Admin…';
+
+    try {
+      // No one is signed in yet, so this uses the primary auth instance directly.
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+
+      // Create the admin profile (role: superadmin) and the bootstrap sentinel
+      // doc together — Firestore rules only allow this combination once, since
+      // the admins/{uid} bootstrap rule requires meta/adminBootstrap to not
+      // already exist.
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'admins', cred.user.uid), {
+        email,
+        displayName: displayName || email,
+        role: 'superadmin',
+        createdAt: serverTimestamp()
+      });
+      batch.set(bootstrapRef, {
+        initialized: true,
+        initializedAt: serverTimestamp(),
+        by: cred.user.uid
+      });
+      await batch.commit();
+
+      showToast('Super Admin account created. Signing you in…', 'success');
+      window.location.reload();
+    } catch (err) {
+      showToast('Error creating Super Admin: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Create Super Admin Account';
     }
   });
 }

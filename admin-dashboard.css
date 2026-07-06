@@ -2007,6 +2007,24 @@ select:focus {
   height: 16px;
 }
 
+.admin-role-badge {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--border-color);
+  color: var(--text-secondary);
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: 6px;
+}
+
+.admin-role-badge.superadmin {
+  background-color: rgba(37, 99, 235, 0.1);
+  color: var(--primary-color);
+}
+
 /* Admin welcome banner override */
 .admin-banner {
   background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
