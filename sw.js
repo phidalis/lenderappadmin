@@ -1,8 +1,8 @@
 // =============================================
-//  Lender Admin — Service Worker  v1.0.0
+//  Lender Admin — Service Worker  v1.1.0
 // =============================================
 
-const CACHE_NAME = 'lender-admin-v1';
+const CACHE_NAME = 'lender-admin-v2';
 const OFFLINE_URL = './index.html';
 
 // Assets to pre-cache on install
