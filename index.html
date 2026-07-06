@@ -6,24 +6,6 @@
   <title>Lender Admin - Control Panel</title>
   <!-- SEO & Meta -->
   <meta name="description" content="A professional administrative Loan Management dashboard system. Register clients, disburse loans, record collections, and view ledger sheets.">
-
-  <!-- PWA Manifest -->
-  <link rel="manifest" href="manifest.json">
-
-  <!-- PWA / Mobile Meta -->
-  <meta name="theme-color" content="#2563EB">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Lender Admin">
-  <meta name="application-name" content="Lender Admin">
-  <meta name="msapplication-TileColor" content="#2563EB">
-  <meta name="msapplication-TileImage" content="icon-512.png">
-
-  <!-- Apple Touch Icon -->
-  <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
   
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,7 +14,36 @@
   
   <!-- CSS Stylesheet -->
   <link rel="stylesheet" href="admin-dashboard.css">
-  
+
+  <!-- PWA: Manifest -->
+  <link rel="manifest" href="admin-manifest.json">
+  <meta name="theme-color" content="#2563eb">
+
+  <!-- PWA: Icons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="admin-icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="admin-icon-512.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="admin-icon-192.png">
+
+  <!-- PWA: iOS standalone -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Lender Admin">
+
+  <style>
+    #install-hint {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 16px;
+      font-size: 0.875rem;
+      color: #6b7280;
+    }
+    #install-hint svg { width: 16px; height: 16px; stroke: #2563eb; }
+    #install-link { color: #2563eb; font-weight: 600; text-decoration: none; }
+    #install-link:hover { text-decoration: underline; }
+  </style>
+
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -73,6 +84,11 @@
           <i data-lucide="arrow-right"></i>
         </button>
 
+        <div class="auth-install-hint" id="install-hint">
+          <i data-lucide="download"></i>
+          <a href="#" id="install-link">Download App</a>
+        </div>
+
         <div class="demo-credentials-box admin-box">
           <div class="demo-title text-primary">
             <i data-lucide="shield"></i>
@@ -110,6 +126,12 @@
         <!-- Settings Trigger -->
         <button class="header-btn-settings" id="admin-settings-trigger" title="Text & Styling Settings">
           <i data-lucide="settings-2"></i>
+        </button>
+
+        <!-- Overdue Notification Bell -->
+        <button class="header-btn-settings" id="admin-notif-bell" title="Overdue Alerts" style="position: relative;">
+          <i data-lucide="bell"></i>
+          <span id="admin-notif-badge" style="display:none; position:absolute; top:2px; right:2px; background:var(--color-danger); color:#fff; font-size:0.65rem; font-weight:700; min-width:16px; height:16px; border-radius:999px; align-items:center; justify-content:center; line-height:1;"></span>
         </button>
       </div>
       
@@ -233,8 +255,7 @@
 
             <div class="form-group">
               <label for="cust-phone">Phone Number</label>
-              <div class="input-wrapper">
-                <i data-lucide="phone" class="input-icon"></i>
+              <div class="input-wrapper input-wrapper-noicon">
                 <input type="tel" id="cust-phone" placeholder="e.g. +1 (555) 019-9944" required>
               </div>
             </div>
@@ -286,11 +307,20 @@
 
           <!-- Customer Table and Search -->
           <div class="dashboard-card list-box">
-            <div class="search-title-bar">
+            <div class="search-title-bar flex-column align-start gap-4">
               <h3>Customer Database</h3>
-              <div class="search-wrapper">
-                <i data-lucide="search"></i>
-                <input type="text" id="cust-search" placeholder="Search by name or ID...">
+              <div class="ledger-filter-row">
+                <div class="search-wrapper flex-grow">
+                  <i data-lucide="search"></i>
+                  <input type="text" id="cust-search" placeholder="Search by name or ID...">
+                </div>
+                <div class="filter-pill-box">
+                  <button class="filter-pill active" data-cust-filter="all">All</button>
+                  <button class="filter-pill" data-cust-filter="active">Active</button>
+                  <button class="filter-pill" data-cust-filter="overdue">Overdue</button>
+                  <button class="filter-pill" data-cust-filter="paid">Paid Up</button>
+                  <button class="filter-pill" data-cust-filter="none">No Loans</button>
+                </div>
               </div>
             </div>
 
@@ -303,6 +333,7 @@
                     <th>Phone</th>
                     <th>National ID</th>
                     <th>Loans</th>
+                    <th>Penalty</th>
                     <th>Limit</th>
                     <th>Date Added</th>
                     <th>Actions</th>
@@ -532,6 +563,42 @@
               </div>
             </div>
 
+            <div class="form-group">
+              <label>Late Payment Penalty Type</label>
+              <div class="payment-methods-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <label class="pay-method-option">
+                  <input type="radio" name="lt-penalty-type" value="none" checked>
+                  <span class="method-box">
+                    <i data-lucide="ban"></i>
+                    <span>No Penalty</span>
+                  </span>
+                </label>
+                <label class="pay-method-option">
+                  <input type="radio" name="lt-penalty-type" value="daily">
+                  <span class="method-box">
+                    <i data-lucide="calendar-clock"></i>
+                    <span>Daily Charge</span>
+                  </span>
+                </label>
+                <label class="pay-method-option">
+                  <input type="radio" name="lt-penalty-type" value="flat">
+                  <span class="method-box">
+                    <i data-lucide="badge-alert"></i>
+                    <span>One-Time Fee</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group" id="lt-penalty-amount-group" style="display: none;">
+              <label for="lt-penalty-amount" id="lt-penalty-amount-label">Penalty Amount (KSh)</label>
+              <div class="input-wrapper">
+                <i data-lucide="alert-triangle" class="input-icon"></i>
+                <input type="number" id="lt-penalty-amount" placeholder="e.g. 100" min="0" step="any">
+              </div>
+              <span class="help-text" id="lt-penalty-amount-hint">Charged automatically once a loan of this type becomes overdue.</span>
+            </div>
+
             <button type="submit" class="btn btn-primary btn-block">
               <span>Add Loan Type</span>
               <i data-lucide="plus-circle"></i>
@@ -744,135 +811,117 @@
     </div>
   </div>
 
-  <!-- ================= PWA INSTALL BANNER ================= -->
-  <div id="pwa-install-banner" style="
-    display: none;
-    position: fixed;
-    bottom: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 32px);
-    max-width: 480px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.14);
-    padding: 16px 20px;
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    animation: slideUpBanner 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards;
-  ">
-    <img src="icon-192.png" alt="Lender Admin" style="width:48px;height:48px;border-radius:12px;flex-shrink:0;">
-    <div style="flex:1;min-width:0;">
-      <div style="font-weight:700;font-size:0.95rem;color:#1e293b;">Install Lender Admin</div>
-      <div style="font-size:0.8rem;color:#64748b;margin-top:2px;">Add to home screen for offline access</div>
-    </div>
-    <div style="display:flex;gap:8px;flex-shrink:0;">
-      <button id="pwa-install-dismiss" style="
-        background: #f1f5f9;
-        border: none;
-        border-radius: 8px;
-        padding: 8px 12px;
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: #64748b;
-        cursor: pointer;
-      ">Later</button>
-      <button id="pwa-install-btn" style="
-        background: #2563EB;
-        border: none;
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-size: 0.82rem;
-        font-weight: 700;
-        color: #fff;
-        cursor: pointer;
-        white-space: nowrap;
-      ">⬇ Install</button>
+  <!-- ================= ISSUE DIRECT LOAN MODAL ================= -->
+  <div id="issue-loan-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-title">Issue Loan to Client</div>
+      <div class="modal-desc" id="issue-loan-client-desc">Disburse a new loan directly, without a client-submitted application.</div>
+
+      <form id="admin-issue-loan-form" style="width: 100%; display: flex; flex-direction: column; gap: 16px;">
+        <input type="hidden" id="issue-loan-cust-id">
+
+        <div class="form-group" style="text-align: left;">
+          <label for="issue-loan-type-select">Loan Type</label>
+          <select id="issue-loan-type-select" required>
+            <option value="" disabled selected>Choose a loan type...</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="text-align: left;">
+          <label for="issue-loan-amount">Amount to Disburse (KSh)</label>
+          <div class="input-wrapper">
+            <i data-lucide="banknote" class="input-icon"></i>
+            <input type="number" id="issue-loan-amount" placeholder="0.00" min="1" step="any" required style="padding-left: 44px;">
+          </div>
+          <span class="help-text" id="issue-loan-limit-hint">Select a loan type to continue.</span>
+        </div>
+
+        <div id="issue-loan-preview" style="display:none; background: var(--card-bg, #fff); border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; color: var(--text-secondary, #64748b); border: 1px solid var(--border-color); flex-direction: column; gap: 4px;">
+          <div><strong style="color: var(--text-primary);">Total Repayable:</strong> <span id="issue-loan-total-value" style="font-weight:600; color: var(--primary-color);"></span></div>
+          <div><strong style="color: var(--text-primary);">Due Date:</strong> <span id="issue-loan-due-value" style="font-weight:600; color: var(--primary-color);"></span></div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn" style="border: 1px solid var(--border-color); flex: 1;" id="btn-close-issue-loan-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;" id="btn-submit-issue-loan">
+            <span>Issue Loan</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
-  <style>
-    @keyframes slideUpBanner {
-      from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-    }
-    /* Dark-theme support for the banner */
-    [data-theme="dark"] #pwa-install-banner {
-      background: #1e293b;
-      border-color: #334155;
-    }
-    [data-theme="dark"] #pwa-install-banner div[style*="1e293b"] { color: #f1f5f9 !important; }
-    [data-theme="dark"] #pwa-install-dismiss {
-      background: #334155;
-      color: #94a3b8;
-    }
-  </style>
+  <!-- ================= ADJUST PENALTY MODAL ================= -->
+  <div id="adjust-penalty-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-title">Adjust Client Penalty</div>
+      <div class="modal-desc" id="adjust-penalty-client-desc">Manually add a penalty charge to one of this client's loans.</div>
+
+      <form id="admin-adjust-penalty-form" style="width: 100%; display: flex; flex-direction: column; gap: 16px;">
+        <input type="hidden" id="adjust-penalty-cust-id">
+
+        <div class="form-group" style="text-align: left;">
+          <label for="adjust-penalty-loan-select">Select Loan</label>
+          <select id="adjust-penalty-loan-select" required>
+            <option value="" disabled selected>Choose a loan record...</option>
+          </select>
+          <span class="help-text" id="adjust-penalty-loan-hint">No active or overdue loans for this client.</span>
+        </div>
+
+        <div class="form-group" style="text-align: left;">
+          <label for="adjust-penalty-amount">Penalty Amount to Add (KSh)</label>
+          <div class="input-wrapper">
+            <i data-lucide="alert-triangle" class="input-icon"></i>
+            <input type="number" id="adjust-penalty-amount" placeholder="0.00" min="1" step="any" required style="padding-left: 44px;">
+          </div>
+          <span class="help-text">This is added on top of the outstanding balance and any auto-applied penalty.</span>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn" style="border: 1px solid var(--border-color); flex: 1;" id="btn-close-adjust-penalty-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;" id="btn-submit-adjust-penalty">
+            <span>Add Penalty</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script type="module" src="admin-dashboard.js"></script>
 
-  <!-- ================= PWA SERVICE WORKER & INSTALL LOGIC ================= -->
+  <!-- PWA: Service Worker + Install Prompt -->
   <script>
-    // ── Register Service Worker ──────────────────────
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then((reg) => {
-            console.log('[PWA] Service Worker registered, scope:', reg.scope);
-
-            // Notify when a new SW is waiting (app updated)
-            reg.addEventListener('updatefound', () => {
-              const newWorker = reg.installing;
-              newWorker.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  console.log('[PWA] New version available. Refresh to update.');
-                  // Optionally show an "Update available" toast here
-                }
-              });
-            });
-          })
-          .catch((err) => console.error('[PWA] SW registration failed:', err));
+        navigator.serviceWorker.register('./admin-service-worker.js', { scope: './' })
+          .then(r => console.log('[PWA] Lender Admin SW registered, scope:', r.scope))
+          .catch(e => console.error('[PWA] Lender Admin SW failed:', e));
       });
     }
 
-    // ── Install Prompt (Add to Home Screen) ──────────
-    let deferredPrompt = null;
-    const banner  = document.getElementById('pwa-install-banner');
-    const btnInstall  = document.getElementById('pwa-install-btn');
-    const btnDismiss  = document.getElementById('pwa-install-dismiss');
+    let deferredPrompt;
+    const installHint = document.getElementById('install-hint');
+    const installLink = document.getElementById('install-link');
 
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-
-      // Only show if user hasn't dismissed recently
-      const dismissed = sessionStorage.getItem('pwa-banner-dismissed');
-      if (!dismissed) {
-        banner.style.display = 'flex';
-      }
+      installHint.style.display = 'flex';
     });
 
-    btnInstall?.addEventListener('click', async () => {
+    installLink.addEventListener('click', async (e) => {
+      e.preventDefault();
       if (!deferredPrompt) return;
-      banner.style.display = 'none';
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      console.log('[PWA] Install prompt outcome:', outcome);
       deferredPrompt = null;
+      installHint.style.display = 'none';
     });
 
-    btnDismiss?.addEventListener('click', () => {
-      banner.style.display = 'none';
-      sessionStorage.setItem('pwa-banner-dismissed', '1');
-    });
-
-    // Hide banner once app is installed
     window.addEventListener('appinstalled', () => {
-      banner.style.display = 'none';
+      installHint.style.display = 'none';
       deferredPrompt = null;
-      console.log('[PWA] App installed successfully!');
     });
   </script>
+</body>
 </html>

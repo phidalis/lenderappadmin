@@ -75,6 +75,10 @@ const cache = {
 let unsubUsers = null, unsubLoans = null, unsubRepayments = null;
 let unsubLoanTypes = null, unsubLoanApps = null;
 
+// Track which loans were already known to be overdue, so we only notify on NEW overdues
+let knownOverdueIds = new Set();
+let hasInitializedOverdueTracking = false;
+
 // =============================================================================
 // DOMContentLoaded
 // =============================================================================
@@ -149,6 +153,27 @@ document.addEventListener('DOMContentLoaded', () => {
     r.addEventListener('change', updateDisbursalSection)
   );
 
+  // Loan type penalty fields toggle
+  document.querySelectorAll('input[name="lt-penalty-type"]').forEach(r =>
+    r.addEventListener('change', updateLoanTypePenaltyFields)
+  );
+
+  // Client status filters
+  wireCustFilters();
+
+  // Issue Direct Loan modal
+  wireIssueLoanModal();
+
+  // Adjust Penalty modal
+  wireAdjustPenaltyModal();
+
+  // Overdue notification bell
+  document.getElementById('admin-notif-bell')?.addEventListener('click', () => switchView('admin-view-home'));
+
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+
   // ── Firebase Auth state listener ─────────────────────────────────────────────
   onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -215,6 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
   wireAppStatusModal();
 
   // ── Bottom nav search inputs ─────────────────────────────────────────────────
+  document.getElementById('issue-loan-type-select')?.addEventListener('change', updateIssueLoanPreview);
+  document.getElementById('issue-loan-amount')?.addEventListener('input', updateIssueLoanPreview);
+
   document.getElementById('cust-search')?.addEventListener('input', () => renderAdminCustomersList());
   document.getElementById('loans-search')?.addEventListener('input', () => renderAdminLoansLedger());
   document.getElementById('repayments-search')?.addEventListener('input', () => renderAdminRepaymentsLog());
@@ -286,17 +314,51 @@ function teardownListeners() {
 
 
 // =============================================================================
-// OVERDUE CHECK (Firestore)
+// OVERDUE CHECK (Firestore) + AUTO PENALTY ACCRUAL
 // =============================================================================
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 async function runOverdueCheckFirestore() {
   const now = Date.now();
   const batch = writeBatch(db);
   let changed = false;
 
   cache.loans.forEach(loan => {
+    const ref = doc(db, 'loans', loan.id);
+    const updates = {};
+
+    // Transition active → overdue
     if (loan.status === 'active' && loan.remainingAmount > 0 && loan.dueDate < now) {
-      const ref = doc(db, 'loans', loan.id);
-      batch.update(ref, { status: 'overdue' });
+      updates.status = 'overdue';
+    }
+
+    const isOverdueNow = updates.status === 'overdue' || loan.status === 'overdue';
+
+    if (isOverdueNow && loan.remainingAmount > 0 && loan.penaltyType && loan.penaltyType !== 'none') {
+      if (loan.penaltyType === 'flat' && !loan.penaltyApplied) {
+        const amt = Number(loan.penaltyAmount) || 0;
+        if (amt > 0) {
+          updates.remainingAmount = (loan.remainingAmount || 0) + amt;
+          updates.totalRepayable  = (loan.totalRepayable || 0) + amt;
+          updates.penaltyAccrued  = (loan.penaltyAccrued || 0) + amt;
+          updates.penaltyApplied  = true;
+        }
+      } else if (loan.penaltyType === 'daily') {
+        const amt = Number(loan.penaltyAmount) || 0;
+        const lastApplied = loan.lastPenaltyDate ? Number(loan.lastPenaltyDate) : loan.dueDate;
+        const daysElapsed = Math.floor((now - lastApplied) / MS_PER_DAY);
+        if (amt > 0 && daysElapsed >= 1) {
+          const totalPenalty = amt * daysElapsed;
+          updates.remainingAmount = (loan.remainingAmount || 0) + totalPenalty;
+          updates.totalRepayable  = (loan.totalRepayable || 0) + totalPenalty;
+          updates.penaltyAccrued  = (loan.penaltyAccrued || 0) + totalPenalty;
+          updates.lastPenaltyDate = now;
+        }
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      batch.update(ref, updates);
       changed = true;
     }
   });
@@ -304,6 +366,37 @@ async function runOverdueCheckFirestore() {
   if (changed) {
     try { await batch.commit(); } catch (_) {}
   }
+
+  checkForNewOverdueNotifications();
+}
+
+function checkForNewOverdueNotifications() {
+  const overdueLoans = cache.loans.filter(l => l.status === 'overdue');
+  const currentIds = new Set(overdueLoans.map(l => l.id));
+
+  if (!hasInitializedOverdueTracking) {
+    // First load — just record state, don't spam notifications for pre-existing overdues
+    knownOverdueIds = currentIds;
+    hasInitializedOverdueTracking = true;
+    return;
+  }
+
+  const newlyOverdue = overdueLoans.filter(l => !knownOverdueIds.has(l.id));
+  newlyOverdue.forEach(loan => {
+    const client = cache.users.find(c => c.id === loan.customerId);
+    const name = client ? client.name : `Client ID ${loan.customerId}`;
+    showToast(`Loan ${loan.id} for ${name} is now overdue.`, 'error');
+
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try {
+        new Notification('Loan Overdue', {
+          body: `${name}'s loan (${loan.id}) is now overdue — ${formatCurrency(loan.remainingAmount)} outstanding.`,
+        });
+      } catch (_) {}
+    }
+  });
+
+  knownOverdueIds = currentIds;
 }
 
 
@@ -452,6 +545,16 @@ function renderAdminDashboard() {
   el('admin-metric-overdue-count').textContent = `${overdueLoans.length} Overdue Account${overdueLoans.length === 1 ? '' : 's'}`;
   el('admin-portfolio-percent').textContent    = `${recoveryRate}%`;
 
+  const notifBadge = el('admin-notif-badge');
+  if (notifBadge) {
+    if (overdueLoans.length > 0) {
+      notifBadge.textContent = overdueLoans.length > 99 ? '99+' : String(overdueLoans.length);
+      notifBadge.style.display = 'flex';
+    } else {
+      notifBadge.style.display = 'none';
+    }
+  }
+
   let totalOutstanding = 0;
   cache.loans.forEach(l => totalOutstanding += (l.remainingAmount || 0));
   el('admin-portfolio-outstanding').textContent = formatCurrency(totalOutstanding);
@@ -568,18 +671,42 @@ function wireAddCustomerForm() {
   });
 }
 
+let activeCustFilter = 'all';
+
+function wireCustFilters() {
+  document.querySelectorAll('[data-cust-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-cust-filter]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeCustFilter = btn.getAttribute('data-cust-filter');
+      renderAdminCustomersList();
+    });
+  });
+}
+
+function getCustomerStatus(custId) {
+  const custLoans = cache.loans.filter(l => l.customerId === custId);
+  if (custLoans.some(l => l.status === 'overdue')) return 'overdue';
+  if (custLoans.some(l => l.status === 'active'))  return 'active';
+  if (custLoans.length > 0)                        return 'paid';
+  return 'none';
+}
+
 function renderAdminCustomersList() {
   const listBody = document.getElementById('admin-customers-table-body');
   if (!listBody) return;
 
   const query = (document.getElementById('cust-search')?.value || '').toLowerCase().trim();
 
-  const filtered = cache.users.filter(c =>
-    c.name?.toLowerCase().includes(query) || c.id?.toLowerCase().includes(query)
-  );
+  const filtered = cache.users.filter(c => {
+    const matchesSearch = c.name?.toLowerCase().includes(query) || c.id?.toLowerCase().includes(query);
+    if (!matchesSearch) return false;
+    if (activeCustFilter === 'all') return true;
+    return getCustomerStatus(c.id) === activeCustFilter;
+  });
 
   if (filtered.length === 0) {
-    listBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No matching customers found.</td></tr>`;
+    listBody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No matching customers found.</td></tr>`;
     return;
   }
 
@@ -595,6 +722,11 @@ function renderAdminCustomersList() {
     else if (paidCount > 0)   loansBadge = `<span class="loan-count-badge paid">${paidCount} paid</span>`;
     else                       loansBadge = `<span class="loan-count-badge none">No loans</span>`;
 
+    const totalPenalty = custLoans.reduce((sum, l) => sum + (l.penaltyAccrued || 0), 0);
+    const penaltyCell  = totalPenalty > 0
+      ? `<span class="loan-count-badge overdue">${formatCurrency(totalPenalty)}</span>`
+      : `<span class="text-muted">—</span>`;
+
     return `
       <tr>
         <td class="font-mono"><strong>${c.id}</strong></td>
@@ -602,10 +734,17 @@ function renderAdminCustomersList() {
         <td>${c.phone}</td>
         <td class="font-mono">${c.nationalId || '<span class="text-muted">—</span>'}</td>
         <td>${loansBadge}</td>
+        <td>${penaltyCell}</td>
         <td><strong>${formatCurrency(c.limit)}</strong></td>
         <td>${formatDate(c.dateAdded)}</td>
         <td>
           <div class="actions-cell-group">
+            <button class="btn-action-icon btn-action-issue" data-issue-loan-cust-id="${c.id}" title="Issue Loan to Client">
+              <i data-lucide="banknote"></i>
+            </button>
+            <button class="btn-action-icon btn-action-penalty" data-adjust-penalty-cust-id="${c.id}" title="Increase Penalty">
+              <i data-lucide="alert-triangle"></i>
+            </button>
             <button class="btn-action-icon btn-action-edit" data-edit-cust-id="${c.id}" title="Edit Customer Details">
               <i data-lucide="edit-3"></i>
             </button>
@@ -625,6 +764,18 @@ function bindCustomerActionListeners() {
   const editModal    = document.getElementById('edit-customer-modal');
   const editSlider   = document.getElementById('edit-cust-limit');
   const editLimitVal = document.getElementById('edit-cust-limit-val');
+
+  document.querySelectorAll('[data-issue-loan-cust-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openIssueLoanModal(btn.getAttribute('data-issue-loan-cust-id'));
+    });
+  });
+
+  document.querySelectorAll('[data-adjust-penalty-cust-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openAdjustPenaltyModal(btn.getAttribute('data-adjust-penalty-cust-id'));
+    });
+  });
 
   document.querySelectorAll('[data-edit-cust-id]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -706,6 +857,209 @@ function wireEditCustomerModal() {
 
 function wireEditCustomerForm() {
   // handled via wireEditCustomerModal — kept as no-op for symmetry
+}
+
+
+// =============================================================================
+// ISSUE DIRECT LOAN (Admin-initiated, bypasses client application)
+// =============================================================================
+function openIssueLoanModal(custId) {
+  const modal      = document.getElementById('issue-loan-modal');
+  const customer   = cache.users.find(c => c.id === custId);
+  const typeSelect = document.getElementById('issue-loan-type-select');
+  if (!modal || !customer || !typeSelect) return;
+
+  document.getElementById('issue-loan-cust-id').value = custId;
+  document.getElementById('issue-loan-client-desc').textContent =
+    `Issue a new loan for ${customer.name} (${custId}). Borrow limit: ${formatCurrency(customer.limit)}.`;
+
+  typeSelect.innerHTML = '<option value="" disabled selected>Choose a loan type...</option>';
+  cache.loanTypes.forEach(lt => {
+    const opt = document.createElement('option');
+    opt.value = lt.id;
+    opt.textContent = `${lt.name} (${lt.term} mo. • ${lt.interestRate}%)`;
+    typeSelect.appendChild(opt);
+  });
+
+  document.getElementById('issue-loan-amount').value = '';
+  document.getElementById('issue-loan-preview').style.display = 'none';
+  document.getElementById('issue-loan-limit-hint').textContent = 'Select a loan type to continue.';
+
+  modal.style.display = 'flex';
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [modal] });
+}
+
+function updateIssueLoanPreview() {
+  const typeSelect = document.getElementById('issue-loan-type-select');
+  const amountEl   = document.getElementById('issue-loan-amount');
+  const hintEl      = document.getElementById('issue-loan-limit-hint');
+  const preview     = document.getElementById('issue-loan-preview');
+  const totalEl     = document.getElementById('issue-loan-total-value');
+  const dueEl       = document.getElementById('issue-loan-due-value');
+
+  const loanType = cache.loanTypes.find(lt => lt.id === typeSelect?.value);
+  const amount   = parseFloat(amountEl?.value);
+
+  if (!loanType) {
+    if (hintEl) hintEl.textContent = 'Select a loan type to continue.';
+    if (preview) preview.style.display = 'none';
+    return;
+  }
+
+  if (hintEl) hintEl.textContent = `${loanType.term}-month term at ${loanType.interestRate}% interest.`;
+
+  if (!amount || amount <= 0) {
+    if (preview) preview.style.display = 'none';
+    return;
+  }
+
+  const total   = parseFloat((amount * (1 + loanType.interestRate / 100)).toFixed(2));
+  const dueDate = calcDueDate(loanType.term);
+
+  if (totalEl) totalEl.textContent = formatCurrency(total);
+  if (dueEl)   dueEl.textContent   = formatDate(dueDate);
+  if (preview) preview.style.display = 'flex';
+}
+
+function wireIssueLoanModal() {
+  document.getElementById('btn-close-issue-loan-modal')?.addEventListener('click', () => {
+    document.getElementById('issue-loan-modal').style.display = 'none';
+  });
+
+  const form = document.getElementById('admin-issue-loan-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const custId    = document.getElementById('issue-loan-cust-id').value;
+    const typeId    = document.getElementById('issue-loan-type-select').value;
+    const amount    = parseFloat(document.getElementById('issue-loan-amount').value);
+    const loanType  = cache.loanTypes.find(lt => lt.id === typeId);
+    const customer  = cache.users.find(c => c.id === custId);
+
+    if (!loanType || !customer) { showToast('Please select a valid loan type.', 'error'); return; }
+    if (!amount || amount <= 0) { showToast('Please enter a valid disbursement amount.', 'error'); return; }
+
+    const interestRate   = loanType.interestRate / 100;
+    const totalRepayable = parseFloat((amount * (1 + interestRate)).toFixed(2));
+    const dueDate        = calcDueDate(loanType.term);
+    const newLoanId       = 'L-' + Math.floor(100000 + Math.random() * 900000);
+
+    const btn = document.getElementById('btn-submit-issue-loan');
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'Issuing…';
+
+    try {
+      await setDoc(doc(db, 'loans', newLoanId), {
+        id:              newLoanId,
+        customerId:      custId,
+        loanTypeName:    loanType.name,
+        amount,
+        term:            loanType.term,
+        purpose:         'admin-issued',
+        interestRate,
+        totalRepayable,
+        remainingAmount: totalRepayable,
+        status:          'active',
+        dateCreated:     Date.now(),
+        disbursedAt:     Date.now(),
+        dueDate,
+        issuedByAdmin:   true,
+        penaltyType:     loanType.penaltyType || 'none',
+        penaltyAmount:   loanType.penaltyAmount || 0,
+        penaltyAccrued:  0,
+        penaltyApplied:  false,
+        lastPenaltyDate: null
+      });
+
+      showToast(`Loan ${newLoanId} issued to ${customer.name}.`, 'success');
+      document.getElementById('issue-loan-modal').style.display = 'none';
+      form.reset();
+    } catch (err) {
+      showToast('Error issuing loan: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Issue Loan';
+    }
+  });
+}
+
+
+// =============================================================================
+// MANUAL PENALTY ADJUSTMENT
+// =============================================================================
+function openAdjustPenaltyModal(custId) {
+  const modal      = document.getElementById('adjust-penalty-modal');
+  const customer   = cache.users.find(c => c.id === custId);
+  const loanSelect = document.getElementById('adjust-penalty-loan-select');
+  const hintEl     = document.getElementById('adjust-penalty-loan-hint');
+  if (!modal || !customer || !loanSelect) return;
+
+  document.getElementById('adjust-penalty-cust-id').value = custId;
+  document.getElementById('adjust-penalty-client-desc').textContent =
+    `Add a manual penalty charge to one of ${customer.name}'s loans.`;
+
+  const custLoans = cache.loans.filter(l =>
+    l.customerId === custId && (l.status === 'active' || l.status === 'overdue')
+  );
+
+  loanSelect.innerHTML = '<option value="" disabled selected>Choose a loan record...</option>';
+  custLoans.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.id;
+    opt.textContent = `${l.id} — ${formatCurrency(l.remainingAmount)} outstanding (${l.status})`;
+    loanSelect.appendChild(opt);
+  });
+
+  if (hintEl) hintEl.textContent = custLoans.length === 0
+    ? 'No active or overdue loans for this client.'
+    : '';
+
+  document.getElementById('adjust-penalty-amount').value = '';
+  modal.style.display = 'flex';
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [modal] });
+}
+
+function wireAdjustPenaltyModal() {
+  document.getElementById('btn-close-adjust-penalty-modal')?.addEventListener('click', () => {
+    document.getElementById('adjust-penalty-modal').style.display = 'none';
+  });
+
+  const form = document.getElementById('admin-adjust-penalty-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const loanId = document.getElementById('adjust-penalty-loan-select').value;
+    const amount = parseFloat(document.getElementById('adjust-penalty-amount').value);
+    const loan   = cache.loans.find(l => l.id === loanId);
+
+    if (!loan)  { showToast('Please select a loan.', 'error'); return; }
+    if (!amount || amount <= 0) { showToast('Please enter a valid penalty amount.', 'error'); return; }
+
+    const btn = document.getElementById('btn-submit-adjust-penalty');
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'Applying…';
+
+    try {
+      await updateDoc(doc(db, 'loans', loanId), {
+        remainingAmount: (loan.remainingAmount || 0) + amount,
+        totalRepayable:  (loan.totalRepayable || 0) + amount,
+        penaltyAccrued:  (loan.penaltyAccrued || 0) + amount
+      });
+
+      showToast(`Penalty of ${formatCurrency(amount)} added to loan ${loanId}.`, 'success');
+      document.getElementById('adjust-penalty-modal').style.display = 'none';
+      form.reset();
+    } catch (err) {
+      showToast('Error applying penalty: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Add Penalty';
+    }
+  });
 }
 
 
@@ -1069,6 +1423,9 @@ function wireAppStatusModal() {
       try {
         const batch = writeBatch(db);
 
+        const penaltyType   = loanType ? (loanType.penaltyType || 'none') : 'none';
+        const penaltyAmount = loanType ? (loanType.penaltyAmount || 0) : 0;
+
         if (app.loanId) {
           // Update existing loan
           batch.update(doc(db, 'loans', app.loanId), {
@@ -1079,7 +1436,12 @@ function wireAppStatusModal() {
             status: 'active',
             term: app.term,
             interestRate,
-            disbursedAt: Date.now()
+            disbursedAt: Date.now(),
+            penaltyType,
+            penaltyAmount,
+            penaltyAccrued: 0,
+            penaltyApplied: false,
+            lastPenaltyDate: null
           });
         } else {
           // Create new loan
@@ -1098,7 +1460,12 @@ function wireAppStatusModal() {
             status:          'active',
             dateCreated:     Date.now(),
             disbursedAt:     Date.now(),
-            dueDate
+            dueDate,
+            penaltyType,
+            penaltyAmount,
+            penaltyAccrued:  0,
+            penaltyApplied:  false,
+            lastPenaltyDate: null
           });
           updates.loanId = newLoanId;
         }
@@ -1175,6 +1542,30 @@ function updateDisbursalSection() {
 // =============================================================================
 // LOAN TYPES
 // =============================================================================
+function updateLoanTypePenaltyFields() {
+  const choice   = document.querySelector('input[name="lt-penalty-type"]:checked')?.value || 'none';
+  const group    = document.getElementById('lt-penalty-amount-group');
+  const label    = document.getElementById('lt-penalty-amount-label');
+  const hint     = document.getElementById('lt-penalty-amount-hint');
+  const amountEl = document.getElementById('lt-penalty-amount');
+  if (!group) return;
+
+  if (choice === 'none') {
+    group.style.display = 'none';
+    if (amountEl) amountEl.required = false;
+  } else {
+    group.style.display = 'block';
+    if (amountEl) amountEl.required = true;
+    if (choice === 'daily') {
+      if (label) label.textContent = 'Daily Penalty Amount (KSh)';
+      if (hint)  hint.textContent  = 'Charged every day the loan stays overdue, until fully cleared.';
+    } else {
+      if (label) label.textContent = 'One-Time Penalty Amount (KSh)';
+      if (hint)  hint.textContent  = 'Charged once, the moment a loan of this type becomes overdue.';
+    }
+  }
+}
+
 function wireAddLoanTypeForm() {
   const form = document.getElementById('admin-add-loan-type-form');
   if (!form) return;
@@ -1185,19 +1576,28 @@ function wireAddLoanTypeForm() {
     const term = parseInt(document.getElementById('lt-term').value);
     const rate = parseFloat(document.getElementById('lt-interest').value);
     const desc = document.getElementById('lt-desc').value.trim();
+    const penaltyType   = document.querySelector('input[name="lt-penalty-type"]:checked')?.value || 'none';
+    const penaltyAmount = penaltyType === 'none' ? 0 : parseFloat(document.getElementById('lt-penalty-amount').value);
 
     if (!name || isNaN(term) || isNaN(rate)) {
       showToast('Please fill in all required fields.', 'error');
       return;
     }
 
+    if (penaltyType !== 'none' && (isNaN(penaltyAmount) || penaltyAmount <= 0)) {
+      showToast('Please enter a valid penalty amount.', 'error');
+      return;
+    }
+
     const newId = 'LT-' + Math.floor(100 + Math.random() * 900);
     try {
       await setDoc(doc(db, 'loanTypes', newId), {
-        id: newId, name, term, interestRate: rate, description: desc
+        id: newId, name, term, interestRate: rate, description: desc,
+        penaltyType, penaltyAmount: penaltyAmount || 0
       });
       showToast(`Loan type "${name}" added successfully.`, 'success');
       form.reset();
+      updateLoanTypePenaltyFields();
     } catch (err) {
       showToast('Error adding loan type: ' + err.message, 'error');
     }
@@ -1218,18 +1618,27 @@ function renderAdminLoanTypes() {
     return;
   }
 
-  list.innerHTML = cache.loanTypes.map(lt => `
+  list.innerHTML = cache.loanTypes.map(lt => {
+    let penaltyText = 'No penalty';
+    if (lt.penaltyType === 'daily') penaltyText = `${formatCurrency(lt.penaltyAmount || 0)}/day penalty until cleared`;
+    else if (lt.penaltyType === 'flat') penaltyText = `${formatCurrency(lt.penaltyAmount || 0)} one-time penalty`;
+
+    return `
     <div class="repay-log-item" style="align-items:flex-start;gap:8px;">
       <div style="flex:1;">
         <span class="repay-log-title">${lt.name}</span>
         <span class="repay-log-meta" style="display:block;">
           ${lt.term} months &bull; ${lt.interestRate}% interest${lt.description ? ' &bull; ' + lt.description : ''}
         </span>
+        <span class="repay-log-meta" style="display:block; color:${lt.penaltyType && lt.penaltyType !== 'none' ? 'var(--color-danger)' : 'inherit'};">
+          ${penaltyText}
+        </span>
       </div>
       <button class="btn-action-icon btn-action-delete" data-delete-lt-id="${lt.id}" title="Remove Loan Type">
         <i data-lucide="trash-2"></i>
       </button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   if (typeof lucide !== 'undefined') lucide.createIcons();
   bindLoanTypeDeleteListeners();

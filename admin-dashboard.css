@@ -1932,6 +1932,27 @@ html[data-theme="warm"] .admin-banner {
   border-color: var(--color-danger);
 }
 
+.btn-action-issue {
+  color: var(--color-success);
+}
+.btn-action-issue:hover {
+  background-color: rgba(16, 185, 129, 0.08);
+  border-color: var(--color-success);
+}
+
+.btn-action-penalty {
+  color: #d97706;
+}
+.btn-action-penalty:hover {
+  background-color: rgba(217, 119, 6, 0.08);
+  border-color: #d97706;
+}
+
+.status-pill.overdue {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+}
+
 .actions-cell-group {
   display: flex;
   gap: 8px;
