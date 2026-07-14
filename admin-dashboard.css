@@ -472,13 +472,11 @@ select:focus {
   gap: 20px;
 }
 
-.boot-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid rgba(37, 99, 235, 0.15);
-  border-top-color: #2563eb;
-  border-radius: 50%;
-  animation: boot-spin 0.7s linear infinite;
+.boot-spinner-icon {
+  width: 28px;
+  height: 28px;
+  color: #2563eb;
+  animation: boot-spin 0.8s linear infinite;
 }
 
 @keyframes boot-spin {
