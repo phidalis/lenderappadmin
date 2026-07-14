@@ -21,7 +21,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  setPersistence,
+  browserLocalPersistence
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   getFirestore,
@@ -56,6 +58,21 @@ const firebaseConfig = {
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
+
+// ── Keep admins signed in until they explicitly log out ──────────────────────
+// browserLocalPersistence writes the session to IndexedDB, which survives closing
+// the tab, the browser, or the installed PWA — the session only ends when
+// signOut(auth) is called (i.e. the "Sign out" button).
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+  console.error('Failed to set auth persistence:', err);
+});
+
+// Ask the browser not to evict this app's storage (IndexedDB/localStorage) under
+// storage pressure — relevant mainly for iOS home-screen PWAs, which can
+// otherwise get their local data cleared after long periods of inactivity.
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persist().catch(() => {});
+}
 
 // ── Firestore collection references ──────────────────────────────────────────
 const usersCol        = collection(db, 'users');
