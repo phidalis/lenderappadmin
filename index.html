@@ -49,8 +49,18 @@
 </head>
 <body>
 
+  <!-- ================= BOOT LOADER (shown until auth state is known) ================= -->
+  <div id="app-boot-loader" class="page-container active">
+    <div class="boot-loader-inner">
+      <div class="logo-badge">
+        <i data-lucide="shield-check"></i>
+      </div>
+      <div class="boot-spinner"></div>
+    </div>
+  </div>
+
   <!-- ================= AUTH CONTAINER ================= -->
-  <div id="auth-container" class="page-container active">
+  <div id="auth-container" class="page-container">
     <div class="auth-card">
       <div class="auth-header">
         <div class="logo-badge">

@@ -460,6 +460,31 @@ select:focus {
   display: flex;
 }
 
+#app-boot-loader {
+  align-items: center;
+  justify-content: center;
+}
+
+.boot-loader-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.boot-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(37, 99, 235, 0.15);
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: boot-spin 0.7s linear infinite;
+}
+
+@keyframes boot-spin {
+  to { transform: rotate(360deg); }
+}
+
 .top-navbar {
   position: sticky;
   top: 0;

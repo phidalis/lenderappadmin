@@ -135,6 +135,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   if (needsSetup) {
+    document.getElementById('app-boot-loader')?.classList.remove('active');
     document.getElementById('auth-container')?.classList.remove('active');
     document.getElementById('admin-container')?.classList.remove('active');
     document.getElementById('setup-container')?.classList.add('active');
@@ -323,6 +324,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // AUTH SCREEN HELPERS
 // =============================================================================
 function showLoginScreen() {
+  document.getElementById('app-boot-loader')?.classList.remove('active');
   document.getElementById('auth-container').classList.add('active');
   document.getElementById('admin-container').classList.remove('active');
   const form = document.getElementById('admin-login-form');
@@ -334,6 +336,7 @@ function showLoginScreen() {
 }
 
 async function showAdminPortal() {
+  document.getElementById('app-boot-loader')?.classList.remove('active');
   document.getElementById('auth-container').classList.remove('active');
   document.getElementById('admin-container').classList.add('active');
   showToast('Welcome back, Administrator.', 'success');
