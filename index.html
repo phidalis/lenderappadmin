@@ -32,16 +32,26 @@
   <style>
     #install-hint {
       display: none;
+      margin-top: 16px;
+    }
+    #install-link {
+      display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      margin-top: 16px;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 24px;
+      border-radius: var(--radius-md, 10px);
+      font-weight: 600;
       font-size: 0.875rem;
-      color: #6b7280;
+      cursor: pointer;
+      background-color: #eff6ff;
+      color: #2563eb;
+      border: 1px solid #2563eb;
+      transition: background-color 0.15s ease;
     }
-    #install-hint svg { width: 16px; height: 16px; stroke: #2563eb; }
-    #install-link { color: #2563eb; font-weight: 600; text-decoration: none; }
-    #install-link:hover { text-decoration: underline; }
+    #install-link:hover { background-color: #dbeafe; }
+    #install-link svg { width: 16px; height: 16px; stroke: #2563eb; }
   </style>
 
   <!-- Lucide Icons CDN -->
@@ -95,8 +105,10 @@
         </button>
 
         <div class="auth-install-hint" id="install-hint">
-          <i data-lucide="download"></i>
-          <a href="#" id="install-link">Download App</a>
+          <button type="button" id="install-link">
+            <i data-lucide="download"></i>
+            <span>Download App</span>
+          </button>
         </div>
 
         <div class="demo-credentials-box admin-box">
@@ -1091,7 +1103,7 @@
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      installHint.style.display = 'flex';
+      installHint.style.display = 'block';
     });
 
     installLink.addEventListener('click', async (e) => {
