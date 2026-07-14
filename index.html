@@ -33,6 +33,7 @@
     #install-hint {
       display: none;
       margin-top: 16px;
+      position: relative;
     }
     #install-link {
       display: flex;
@@ -41,6 +42,7 @@
       gap: 8px;
       width: 100%;
       padding: 12px 24px;
+      padding-right: 40px;
       border-radius: var(--radius-md, 10px);
       font-weight: 600;
       font-size: 0.875rem;
@@ -52,6 +54,23 @@
     }
     #install-link:hover { background-color: #dbeafe; }
     #install-link svg { width: 16px; height: 16px; stroke: #2563eb; }
+    #install-hint-close {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6b7280;
+      border-radius: 999px;
+    }
+    #install-hint-close:hover { background-color: #dbeafe; color: #2563eb; }
+    #install-hint-close svg { width: 14px; height: 14px; }
   </style>
 
   <!-- Lucide Icons CDN -->
@@ -108,6 +127,9 @@
           <button type="button" id="install-link">
             <i data-lucide="download"></i>
             <span>Download App</span>
+          </button>
+          <button type="button" id="install-hint-close" title="Hide" aria-label="Hide download prompt">
+            <i data-lucide="x"></i>
           </button>
         </div>
 
@@ -1099,24 +1121,54 @@
     let deferredPrompt;
     const installHint = document.getElementById('install-hint');
     const installLink = document.getElementById('install-link');
+    const installHintClose = document.getElementById('install-hint-close');
+    const DISMISS_KEY = 'lenderAdminInstallHintDismissed';
+
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true;
+
+    // Show the button by default (unless already installed or previously dismissed)
+    if (!isStandalone && localStorage.getItem(DISMISS_KEY) !== '1') {
+      installHint.style.display = 'block';
+    }
 
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      installHint.style.display = 'block';
+      if (localStorage.getItem(DISMISS_KEY) !== '1') {
+        installHint.style.display = 'block';
+      }
     });
 
     installLink.addEventListener('click', async (e) => {
       e.preventDefault();
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      deferredPrompt = null;
+
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        installHint.style.display = 'none';
+        localStorage.setItem(DISMISS_KEY, '1');
+        return;
+      }
+
+      // Browser hasn't (or can't) fire the native install prompt — show manual steps
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const message = isIOS
+        ? 'To install: tap the Share icon in Safari, then choose "Add to Home Screen".'
+        : 'To install: open your browser menu and choose "Install App" or "Add to Home Screen".';
+      alert(message);
+    });
+
+    installHintClose.addEventListener('click', () => {
       installHint.style.display = 'none';
+      localStorage.setItem(DISMISS_KEY, '1');
     });
 
     window.addEventListener('appinstalled', () => {
       installHint.style.display = 'none';
+      localStorage.setItem(DISMISS_KEY, '1');
       deferredPrompt = null;
     });
   </script>
