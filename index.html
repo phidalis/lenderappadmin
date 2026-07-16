@@ -16,13 +16,13 @@
   <link rel="stylesheet" href="admin-dashboard.css">
 
   <!-- PWA: Manifest -->
-  <link rel="manifest" href="admin-manifest.json">
+  <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
 
   <!-- PWA: Icons -->
-  <link rel="icon" type="image/png" sizes="192x192" href="admin-icon-192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="admin-icon-512.png">
-  <link rel="apple-touch-icon" sizes="192x192" href="admin-icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
 
   <!-- PWA: iOS standalone -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1150,7 +1150,7 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./admin-service-worker.js', { scope: './' })
+        navigator.serviceWorker.register('./sw.js', { scope: './' })
           .then(r => console.log('[PWA] Lender Admin SW registered, scope:', r.scope))
           .catch(e => console.error('[PWA] Lender Admin SW failed:', e));
       });
