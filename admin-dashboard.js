@@ -305,13 +305,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // ── Nav links ────────────────────────────────────────────────────────────────
-  document.querySelectorAll('#admin-container .nav-link').forEach(link => {
-    link.addEventListener('click', () => {
-      switchView(link.getAttribute('data-target-view'));
-    });
-  });
-
   // ── Form submissions ─────────────────────────────────────────────────────────
   wireAddCustomerForm();
   wireEditCustomerForm();
@@ -330,6 +323,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ── Close modals ─────────────────────────────────────────────────────────────
   document.getElementById('btn-close-add-borrower-modal')?.addEventListener('click', () => {
     document.getElementById('add-borrower-modal').style.display = 'none';
+    const form = document.getElementById('admin-add-customer-form');
+    const successScreen = document.getElementById('borrower-reg-success');
+    if (form) form.style.display = '';
+    if (successScreen) successScreen.style.display = 'none';
   });
 
   // ── Issue loan client selector → populate loans for selected client ──────────
@@ -377,7 +374,7 @@ async function showAdminPortal() {
   document.getElementById('admin-container').classList.add('active');
   showToast('Welcome back, Administrator.', 'success');
   await setupRealtimeListeners();
-  switchView('admin-view-home');
+  renderAdminView('all');
 }
 
 
@@ -510,39 +507,25 @@ function checkForNewOverdueNotifications() {
 // =============================================================================
 // VIEW ROUTING
 // =============================================================================
-let currentViewId = 'admin-view-home';
 
 function switchView(targetViewId) {
-  currentViewId = targetViewId;
-  document.querySelectorAll('#admin-container .app-view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('#admin-container .nav-link').forEach(l => l.classList.remove('active'));
-
   const target = document.getElementById(targetViewId);
-  if (target) target.classList.add('active');
-
-  const link = document.querySelector(`#admin-container [data-target-view="${targetViewId}"]`);
-  if (link) {
-    link.classList.add('active');
-    link.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-  }
-
-  renderAdminView(targetViewId);
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function refreshCurrentView() {
   if (document.getElementById('admin-container')?.classList.contains('active')) {
-    renderAdminView(currentViewId);
+    renderAdminView('all');
   }
 }
 
 function renderAdminView(viewId) {
-  if (viewId === 'admin-view-home')          renderAdminDashboard();
-  else if (viewId === 'admin-view-customers')    renderAdminCustomersList();
-  else if (viewId === 'admin-view-loans')        renderAdminLoansLedger();
-  else if (viewId === 'admin-view-payments')     renderAdminPaymentsPortal();
-  else if (viewId === 'admin-view-applications') renderAdminApplications();
-  else if (viewId === 'admin-view-loan-settings') renderAdminLoanTypes();
+  renderAdminDashboard();
+  renderAdminCustomersList();
+  renderAdminLoansLedger();
+  renderAdminPaymentsPortal();
+  renderAdminApplications();
+  renderAdminLoanTypes();
 }
 
 
@@ -1243,14 +1226,35 @@ function wireAddCustomerForm() {
         dateAdded:  Date.now()
       });
       showToast(`Customer registered successfully with ID: ${customId}`, 'success');
-      form.reset();
-      const limitInput = document.getElementById('cust-limit');
-      if (limitInput) limitInput.value = 5000;
+
+      const formEl = document.getElementById('admin-add-customer-form');
+      const successScreen = document.getElementById('borrower-reg-success');
+      const successId = document.getElementById('borrower-reg-success-id');
+      if (formEl) formEl.style.display = 'none';
+      if (successId) successId.textContent = `${name} — ID: ${customId}`;
+      if (successScreen) successScreen.style.display = 'flex';
+
+      const doneBtn = document.getElementById('borrower-reg-done-btn');
+      const issueLoanBtn = document.getElementById('borrower-reg-issue-loan-btn');
+      const newDoneHandler = () => {
+        document.getElementById('add-borrower-modal').style.display = 'none';
+        doneBtn?.removeEventListener('click', newDoneHandler);
+      };
+      const newIssueHandler = () => {
+        document.getElementById('add-borrower-modal').style.display = 'none';
+        openIssueLoanModal(customId);
+        issueLoanBtn?.removeEventListener('click', newIssueHandler);
+      };
+      doneBtn?.removeEventListener('click', newDoneHandler);
+      issueLoanBtn?.removeEventListener('click', newIssueHandler);
+      doneBtn?.addEventListener('click', newDoneHandler);
+      issueLoanBtn?.addEventListener('click', newIssueHandler);
+      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [successScreen] });
     } catch (err) {
       showToast('Error registering customer: ' + err.message, 'error');
     } finally {
       btn.disabled = false;
-      btn.querySelector('span').textContent = 'Register Customer';
+      btn.querySelector('span').textContent = 'Register Borrower';
     }
   });
 }
@@ -1451,10 +1455,13 @@ function openAddBorrowerModal() {
   const modal = document.getElementById('add-borrower-modal');
   if (!modal) return;
   const form = document.getElementById('admin-add-customer-form');
+  const successScreen = document.getElementById('borrower-reg-success');
   if (form) {
     form.reset();
     document.getElementById('cust-limit').value = 5000;
+    form.style.display = '';
   }
+  if (successScreen) successScreen.style.display = 'none';
   modal.style.display = 'flex';
   if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [modal] });
 }

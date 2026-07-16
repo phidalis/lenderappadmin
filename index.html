@@ -220,7 +220,7 @@
     <main class="main-content">
       
       <!-- 1. HOME VIEW (OVERVIEW STATS) -->
-      <section id="admin-view-home" class="app-view active">
+      <section id="admin-view-home" class="app-view">
         <div class="welcome-banner admin-banner">
           <div class="welcome-text">
             <h2>Welcome back, Administrator</h2>
@@ -644,47 +644,7 @@
 
     </main>
 
-    <!-- ================= FLOATING BOTTOM NAVIGATION ================= -->
-    <nav class="floating-bottom-nav">
-      <ul class="nav-links-list">
-        <li class="nav-item">
-          <button class="nav-link active" data-target-view="admin-view-home">
-            <i data-lucide="home"></i>
-            <span class="nav-label">Home</span>
-          </button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" data-target-view="admin-view-customers">
-            <i data-lucide="users"></i>
-            <span class="nav-label">Clients</span>
-          </button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" data-target-view="admin-view-loans">
-            <i data-lucide="coins"></i>
-            <span class="nav-label">Loans</span>
-          </button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" data-target-view="admin-view-payments">
-            <i data-lucide="receipt"></i>
-            <span class="nav-label">Payments</span>
-          </button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" data-target-view="admin-view-applications">
-            <i data-lucide="inbox"></i>
-            <span class="nav-label">Applications</span>
-          </button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" data-target-view="admin-view-loan-settings">
-            <i data-lucide="sliders"></i>
-            <span class="nav-label">Loan Types</span>
-          </button>
-        </li>
-      </ul>
-    </nav>
+
   </div>
 
   <!-- ================= EDIT CLIENT MODAL ================= -->
@@ -1040,6 +1000,25 @@
             </button>
           </div>
         </form>
+
+        <div id="borrower-reg-success" style="display:none; flex-direction:column; align-items:center; gap:16px; padding:32px 16px; text-align:center;">
+          <div style="width:56px;height:56px;border-radius:50%;background:rgba(34,197,94,0.12);display:flex;align-items:center;justify-content:center;">
+            <i data-lucide="check-circle" style="width:32px;height:32px;color:var(--success-color,#22c55e);"></i>
+          </div>
+          <div>
+            <h3 style="margin:0 0 4px;">Borrower Registered</h3>
+            <p id="borrower-reg-success-id" style="margin:0;color:var(--text-secondary);font-size:0.85rem;"></p>
+          </div>
+          <div style="display:flex;gap:12px;width:100%;max-width:320px;">
+            <button type="button" class="btn btn-secondary" id="borrower-reg-done-btn" style="flex:1;">
+              <span>Done</span>
+            </button>
+            <button type="button" class="btn btn-primary" id="borrower-reg-issue-loan-btn" style="flex:1;">
+              <i data-lucide="banknote"></i>
+              <span>Issue Loan</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
