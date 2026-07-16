@@ -102,6 +102,14 @@ let unsubLoanTypes = null, unsubLoanApps = null;
 let knownOverdueIds = new Set();
 let hasInitializedOverdueTracking = false;
 
+// ── getDoc helper with timeout — prevents boot-loader hang when offline ──────
+function getDocWithTimeout(ref, ms = 8000) {
+  return Promise.race([
+    getDoc(ref),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+  ]);
+}
+
 // =============================================================================
 // DOMContentLoaded
 // =============================================================================
@@ -126,10 +134,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // gets created atomically alongside the very first admin doc).
   let needsSetup = false;
   try {
-    const bootstrapSnap = await getDoc(bootstrapRef);
+    const bootstrapSnap = await getDocWithTimeout(bootstrapRef);
     needsSetup = !bootstrapSnap.exists();
   } catch (err) {
-    // Fail safe: if this read errors out for any reason, fall through to the
+    // Fail safe: if this read errors or times out, fall through to the
     // normal login screen rather than trapping the user on a blank page.
     needsSetup = false;
   }
@@ -239,7 +247,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       // Verify the logged-in uid has an entry in the admins collection
-      const adminSnap = await getDoc(doc(db, 'admins', user.uid));
+      let adminSnap;
+      try {
+        adminSnap = await getDocWithTimeout(doc(db, 'admins', user.uid));
+      } catch (_) {
+        // Timeout or network error — cannot verify admin, force login
+        showToast('Could not verify admin access. Please sign in.', 'error');
+        await signOut(auth);
+        showLoginScreen();
+        return;
+      }
       if (!adminSnap.exists()) {
         showToast('Access denied: Not an authorised administrator.', 'error');
         await signOut(auth);
