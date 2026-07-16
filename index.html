@@ -46,6 +46,10 @@
 
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- jsPDF for PDF export -->
+  <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://unpkg.com/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -808,6 +812,15 @@
               <span>Download Backup (JSON)</span>
             </button>
             <span class="help-text" id="backup-download-status"></span>
+          </div>
+
+          <div class="form-group">
+            <label>Export Full Report</label>
+            <button type="button" class="btn btn-primary btn-block" id="btn-export-pdf" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-color: transparent;">
+              <i data-lucide="file-text"></i>
+              <span>Export Report (PDF)</span>
+            </button>
+            <span class="help-text">Download a PDF with all clients, active loans, repayments &amp; overdue summary.</span>
           </div>
 
           <div class="form-group">

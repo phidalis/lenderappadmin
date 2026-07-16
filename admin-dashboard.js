@@ -172,6 +172,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Backup & Restore
   document.getElementById('btn-download-backup')?.addEventListener('click', downloadBackup);
+  document.getElementById('btn-export-pdf')?.addEventListener('click', downloadPDFReport);
   document.getElementById('btn-restore-backup')?.addEventListener('click', () => {
     document.getElementById('backup-restore-input')?.click();
   });
@@ -559,6 +560,12 @@ function formatDate(ts) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function formatDateTime(ts) {
+  if (!ts) return '—';
+  const d = ts instanceof Date ? ts : (ts?.toDate ? ts.toDate() : new Date(ts));
+  return d.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 function tsToMs(ts) {
   if (!ts) return 0;
   if (ts?.toDate) return ts.toDate().getTime();
@@ -744,6 +751,146 @@ async function restoreFromBackup(file) {
   } finally {
     if (btn) { btn.disabled = false; btn.querySelector('span').textContent = 'Choose Backup File & Restore'; }
   }
+}
+
+
+// =============================================================================
+// PDF REPORT EXPORT
+// =============================================================================
+function downloadPDFReport() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let y = 15;
+
+  const addPageIfNeeded = (needed) => {
+    if (y + needed > 275) { doc.addPage(); y = 15; }
+  };
+
+  // Title
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Lender Admin - Full Portfolio Report', pageWidth / 2, y, { align: 'center' });
+  y += 8;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, y, { align: 'center' });
+  doc.setTextColor(0);
+  y += 12;
+
+  // ── SUMMARY ──
+  let totalDisbursed = 0, totalCollected = 0, totalOutstanding = 0, totalOverdue = 0;
+  cache.loans.forEach(l => { totalDisbursed += (l.amount || 0); totalOutstanding += (l.remainingAmount || 0); if (l.status === 'overdue') totalOverdue += (l.remainingAmount || 0); });
+  cache.repayments.forEach(r => totalCollected += (r.amount || 0));
+  const recovery = totalDisbursed > 0 ? Math.min(100, Math.round((totalCollected / totalDisbursed) * 100)) : 0;
+
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Portfolio Summary', 14, y); y += 7;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Total Clients: ${cache.users.length}`, 14, y); y += 6;
+  doc.text(`Total Loans: ${cache.loans.length}`, 14, y); y += 6;
+  doc.text(`Total Disbursed: ${formatCurrency(totalDisbursed)}`, 14, y); y += 6;
+  doc.text(`Total Collected: ${formatCurrency(totalCollected)}`, 14, y); y += 6;
+  doc.text(`Outstanding: ${formatCurrency(totalOutstanding)}`, 14, y); y += 6;
+  doc.text(`Overdue: ${formatCurrency(totalOverdue)}`, 14, y); y += 6;
+  doc.text(`Recovery Rate: ${recovery}%`, 14, y); y += 10;
+
+  // ── ALL LOANS TABLE ──
+  if (cache.loans.length > 0) {
+    addPageIfNeeded(20);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('All Loans', 14, y); y += 3;
+    doc.autoTable({
+      startY: y,
+      head: [['Loan ID', 'Client', 'Loan Type', 'Amount', 'Remaining', 'Status', 'Due Date']],
+      body: cache.loans.map(l => {
+        const c = cache.users.find(u => u.id === l.customerId);
+        return [l.id, c ? c.name : l.customerId, l.loanTypeName || '-', formatCurrency(l.amount), formatCurrency(l.remainingAmount), l.status, formatDate(l.dueDate)];
+      }),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [37, 99, 235] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { left: 14 }
+    });
+    y = doc.lastAutoTable.finalY + 10;
+  }
+
+  // ── CLIENT PORTFOLIO TABLE ──
+  addPageIfNeeded(20);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Client Portfolio', 14, y); y += 3;
+  doc.autoTable({
+    startY: y,
+    head: [['ID', 'Name', 'Phone', 'National ID', 'Loans', 'Penalty', 'Limit']],
+    body: cache.users.map(c => {
+      const cLoans = cache.loans.filter(l => l.customerId === c.id);
+      const penalty = cLoans.reduce((s, l) => s + (l.penaltyAccrued || 0), 0);
+      return [c.id, c.name, c.phone, c.nationalId || '-', cLoans.length, penalty > 0 ? formatCurrency(penalty) : '-', formatCurrency(c.limit)];
+    }),
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [37, 99, 235] },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    margin: { left: 14 }
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  // ── REPAYMENTS TABLE ──
+  if (cache.repayments.length > 0) {
+    addPageIfNeeded(20);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Repayment History', 14, y); y += 3;
+    doc.autoTable({
+      startY: y,
+      head: [['Repayment ID', 'Client', 'Loan ID', 'Amount', 'Date & Time']],
+      body: cache.repayments.map(r => {
+        const c = cache.users.find(u => u.id === r.customerId);
+        return [r.id, c ? c.name : r.customerId, r.loanId || '-', formatCurrency(r.amount), formatDateTime(r.timestamp || r.date)];
+      }),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [37, 99, 235] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { left: 14 }
+    });
+    y = doc.lastAutoTable.finalY + 10;
+  }
+
+  // ── LOAN APPLICATIONS TABLE ──
+  if (cache.loanApplications.length > 0) {
+    addPageIfNeeded(20);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Loan Applications', 14, y); y += 3;
+    doc.autoTable({
+      startY: y,
+      head: [['App ID', 'Client', 'Type', 'Amount', 'Status', 'Date']],
+      body: cache.loanApplications.map(a => {
+        const c = cache.users.find(u => u.id === a.customerId);
+        return [a.id, c ? c.name : a.customerId, a.loanTypeName || '-', formatCurrency(a.amount), a.status || 'pending', formatDate(a.dateApplied)];
+      }),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [37, 99, 235] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { left: 14 }
+    });
+  }
+
+  // Footer on every page
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Page ${i} of ${totalPages} — Lender Admin Report`, pageWidth / 2, 290, { align: 'center' });
+  }
+
+  doc.save(`Lender-Report-${new Date().toISOString().slice(0, 10)}.pdf`);
+  showToast('PDF report downloaded.', 'success');
 }
 
 
@@ -964,7 +1111,7 @@ function renderAdminDashboard() {
   el('admin-metric-loans-count').textContent  = `${cache.loans.length} Loan${cache.loans.length === 1 ? '' : 's'} Disbursed`;
   el('admin-metric-collected').textContent    = formatCurrency(totalCollected);
 
-  const recoveryRate = totalDisbursed > 0 ? Math.round((totalCollected / totalDisbursed) * 100) : 0;
+  const recoveryRate = totalDisbursed > 0 ? Math.min(100, Math.round((totalCollected / totalDisbursed) * 100)) : 0;
   el('admin-metric-recovery-rate').textContent = `Recovery rate: ${recoveryRate}%`;
   el('admin-metric-overdue').textContent       = formatCurrency(totalOverdue);
   el('admin-metric-overdue-count').textContent = `${overdueLoans.length} Overdue Account${overdueLoans.length === 1 ? '' : 's'}`;
@@ -1697,7 +1844,8 @@ function wireRepaymentForm() {
           customerId:  loan.customerId,
           amount,
           method,
-          timestamp:   Date.now()
+          timestamp:   Date.now(),
+          date:        Date.now()
         });
         await batch.commit();
 
@@ -1776,7 +1924,7 @@ function renderAdminRepaymentsLog() {
       <div class="repay-log-item">
         <div class="repay-log-details">
           <span class="repay-log-title">Payment: ${name} (Loan ${rep.loanId})</span>
-          <span class="repay-log-meta">${formatDate(rep.timestamp)} • Method: ${(rep.method || '').toUpperCase()}</span>
+          <span class="repay-log-meta">${formatDateTime(rep.timestamp || rep.date)} • Method: ${(rep.method || '').toUpperCase()}</span>
         </div>
         <span class="repay-log-amount">+${formatCurrency(rep.amount)}</span>
       </div>`;
