@@ -1522,13 +1522,39 @@ select:focus {
 
 .nav-links-list {
   display: flex;
-  justify-content: space-around;
+  justify-content: flex-start;
   align-items: center;
   list-style: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.nav-links-list::-webkit-scrollbar {
+  height: 4px;
+}
+
+.nav-links-list::-webkit-scrollbar-thumb {
+  background-color: var(--glass-border);
+  border-radius: 4px;
+}
+
+.nav-links-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .nav-item {
-  flex-grow: 1;
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.nav-item .nav-link {
+  width: auto;
+  padding-left: 14px;
+  padding-right: 14px;
 }
 
 .nav-link {
@@ -2243,5 +2269,88 @@ html[data-theme="warm"] .admin-banner {
 .loan-count-badge.none {
   background-color: var(--bg-secondary);
   color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   CLIENTS SECONDARY NAV
+   ========================================================================== */
+
+.clients-secondary-nav {
+  display: flex;
+  gap: 10px;
+  padding: 4px 0 16px;
+  flex-wrap: wrap;
+}
+
+.clients-secondary-nav .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+  border: 1.5px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+}
+
+.clients-secondary-nav .btn:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background-color: var(--bg-secondary);
+}
+
+.clients-secondary-nav .btn.btn-primary {
+  background: var(--gradient-primary);
+  color: #fff;
+  border-color: transparent;
+}
+
+.clients-secondary-nav .btn.btn-primary:hover {
+  opacity: 0.9;
+  color: #fff;
+}
+
+.clients-secondary-nav .btn i {
+  width: 18px;
+  height: 18px;
+}
+
+/* ==========================================================================
+   FULL-SCREEN MODAL BODY SCROLL
+   ========================================================================== */
+
+.modal-body-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.full-screen-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+@media (max-width: 600px) {
+  .clients-secondary-nav {
+    gap: 8px;
+  }
+  .clients-secondary-nav .btn {
+    padding: 8px 14px;
+    font-size: var(--fs-xs);
+  }
+  .modal-body-scroll {
+    padding: 16px;
+  }
 }
 

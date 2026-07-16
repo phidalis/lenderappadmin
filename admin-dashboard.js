@@ -227,12 +227,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Client status filters
   wireCustFilters();
 
-  // Issue Direct Loan modal
-  wireIssueLoanModal();
-
-  // Adjust Penalty modal
-  wireAdjustPenaltyModal();
-
   // Overdue notification bell
   document.getElementById('admin-notif-bell')?.addEventListener('click', () => switchView('admin-view-home'));
 
@@ -307,6 +301,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   wireAddLoanTypeForm();
   wireEditCustomerModal();
   wireAppStatusModal();
+  wireIssueLoanModal();
+  wireAdjustPenaltyModal();
+
+  // ── Clients secondary nav buttons ────────────────────────────────────────────
+  document.getElementById('btn-open-add-borrower-modal')?.addEventListener('click', () => openAddBorrowerModal());
+  document.getElementById('btn-open-issue-loan-modal')?.addEventListener('click', () => openIssueLoanModal());
+  document.getElementById('btn-open-adjust-penalty-modal')?.addEventListener('click', () => openAdjustPenaltyModal());
+
+  // ── Close modals ─────────────────────────────────────────────────────────────
+  document.getElementById('btn-close-add-borrower-modal')?.addEventListener('click', () => {
+    document.getElementById('add-borrower-modal').style.display = 'none';
+  });
+
+  // ── Issue loan client selector → populate loans for selected client ──────────
+  document.getElementById('issue-loan-cust-select')?.addEventListener('change', (e) => {
+    const custId = e.target.value;
+    const custHidden = document.getElementById('issue-loan-cust-id');
+    if (custHidden) custHidden.value = custId;
+    const customer = cache.users.find(c => c.id === custId);
+    if (customer) {
+      document.getElementById('issue-loan-client-desc').textContent =
+        `Issue a new loan for ${customer.name} (${custId}). Borrow limit: ${formatCurrency(customer.limit)}.`;
+    }
+  });
 
   // ── Bottom nav search inputs ─────────────────────────────────────────────────
   document.getElementById('issue-loan-type-select')?.addEventListener('change', updateIssueLoanPreview);
@@ -485,7 +503,10 @@ function switchView(targetViewId) {
   if (target) target.classList.add('active');
 
   const link = document.querySelector(`#admin-container [data-target-view="${targetViewId}"]`);
-  if (link) link.classList.add('active');
+  if (link) {
+    link.classList.add('active');
+    link.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
 
   renderAdminView(targetViewId);
   if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -1012,12 +1033,6 @@ function renderAdminDashboard() {
 // CUSTOMERS
 // =============================================================================
 function wireSliders() {
-  const custSlider = document.getElementById('cust-limit');
-  const custVal    = document.getElementById('cust-limit-val');
-  if (custSlider && custVal) {
-    custSlider.addEventListener('input', () => { custVal.textContent = formatCurrency(custSlider.value); });
-  }
-
   const editSlider = document.getElementById('edit-cust-limit');
   const editVal    = document.getElementById('edit-cust-limit-val');
   if (editSlider && editVal) {
@@ -1065,7 +1080,8 @@ function wireAddCustomerForm() {
       });
       showToast(`Customer registered successfully with ID: ${customId}`, 'success');
       form.reset();
-      document.getElementById('cust-limit-val').textContent = 'KSh 5,000';
+      const limitInput = document.getElementById('cust-limit');
+      if (limitInput) limitInput.value = 5000;
     } catch (err) {
       showToast('Error registering customer: ' + err.message, 'error');
     } finally {
@@ -1265,17 +1281,54 @@ function wireEditCustomerForm() {
 
 
 // =============================================================================
+// ADD NEW BORROWER MODAL (Full-screen from secondary nav)
+// =============================================================================
+function openAddBorrowerModal() {
+  const modal = document.getElementById('add-borrower-modal');
+  if (!modal) return;
+  const form = document.getElementById('admin-add-customer-form');
+  if (form) {
+    form.reset();
+    document.getElementById('cust-limit').value = 5000;
+  }
+  modal.style.display = 'flex';
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [modal] });
+}
+
+
+// =============================================================================
 // ISSUE DIRECT LOAN (Admin-initiated, bypasses client application)
 // =============================================================================
 function openIssueLoanModal(custId) {
   const modal      = document.getElementById('issue-loan-modal');
-  const customer   = cache.users.find(c => c.id === custId);
   const typeSelect = document.getElementById('issue-loan-type-select');
-  if (!modal || !customer || !typeSelect) return;
+  const custSelect = document.getElementById('issue-loan-cust-select');
+  const custGroup  = document.getElementById('issue-loan-client-group');
+  const custHidden = document.getElementById('issue-loan-cust-id');
+  if (!modal || !typeSelect) return;
 
-  document.getElementById('issue-loan-cust-id').value = custId;
-  document.getElementById('issue-loan-client-desc').textContent =
-    `Issue a new loan for ${customer.name} (${custId}). Borrow limit: ${formatCurrency(customer.limit)}.`;
+  const customer = custId ? cache.users.find(c => c.id === custId) : null;
+
+  if (customer) {
+    custHidden.value = custId;
+    if (custGroup) custGroup.style.display = 'none';
+    document.getElementById('issue-loan-client-desc').textContent =
+      `Issue a new loan for ${customer.name} (${custId}). Borrow limit: ${formatCurrency(customer.limit)}.`;
+  } else {
+    custHidden.value = '';
+    if (custGroup) custGroup.style.display = 'block';
+    if (custSelect) {
+      custSelect.innerHTML = '<option value="" disabled selected>Choose a client...</option>';
+      cache.users.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.name} (${c.id}) — Limit: ${formatCurrency(c.limit)}`;
+        custSelect.appendChild(opt);
+      });
+    }
+    document.getElementById('issue-loan-client-desc').textContent =
+      'Select a client and disburse a new loan directly.';
+  }
 
   typeSelect.innerHTML = '<option value="" disabled selected>Choose a loan type...</option>';
   cache.loanTypes.forEach(lt => {
@@ -1336,13 +1389,15 @@ function wireIssueLoanModal() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const custId    = document.getElementById('issue-loan-cust-id').value;
+    let custId    = document.getElementById('issue-loan-cust-id').value;
+    if (!custId) custId = document.getElementById('issue-loan-cust-select').value;
     const typeId    = document.getElementById('issue-loan-type-select').value;
     const amount    = parseFloat(document.getElementById('issue-loan-amount').value);
     const loanType  = cache.loanTypes.find(lt => lt.id === typeId);
     const customer  = cache.users.find(c => c.id === custId);
 
-    if (!loanType || !customer) { showToast('Please select a valid loan type.', 'error'); return; }
+    if (!customer) { showToast('Please select a client.', 'error'); return; }
+    if (!loanType) { showToast('Please select a valid loan type.', 'error'); return; }
     if (!amount || amount <= 0) { showToast('Please enter a valid disbursement amount.', 'error'); return; }
 
     const interestRate   = loanType.interestRate / 100;
@@ -1395,30 +1450,51 @@ function wireIssueLoanModal() {
 // =============================================================================
 function openAdjustPenaltyModal(custId) {
   const modal      = document.getElementById('adjust-penalty-modal');
-  const customer   = cache.users.find(c => c.id === custId);
   const loanSelect = document.getElementById('adjust-penalty-loan-select');
   const hintEl     = document.getElementById('adjust-penalty-loan-hint');
-  if (!modal || !customer || !loanSelect) return;
+  const custSelect = document.getElementById('adjust-penalty-cust-select');
+  const custGroup  = document.getElementById('adjust-penalty-client-group');
+  const custHidden = document.getElementById('adjust-penalty-cust-id');
+  if (!modal || !loanSelect) return;
 
-  document.getElementById('adjust-penalty-cust-id').value = custId;
-  document.getElementById('adjust-penalty-client-desc').textContent =
-    `Add a manual penalty charge to one of ${customer.name}'s loans.`;
+  const customer = custId ? cache.users.find(c => c.id === custId) : null;
 
-  const custLoans = cache.loans.filter(l =>
-    l.customerId === custId && (l.status === 'active' || l.status === 'overdue')
-  );
+  if (customer) {
+    custHidden.value = custId;
+    if (custGroup) custGroup.style.display = 'none';
+    document.getElementById('adjust-penalty-client-desc').textContent =
+      `Add a manual penalty charge to one of ${customer.name}'s loans.`;
 
-  loanSelect.innerHTML = '<option value="" disabled selected>Choose a loan record...</option>';
-  custLoans.forEach(l => {
-    const opt = document.createElement('option');
-    opt.value = l.id;
-    opt.textContent = `${l.id} — ${formatCurrency(l.remainingAmount)} outstanding (${l.status})`;
-    loanSelect.appendChild(opt);
-  });
-
-  if (hintEl) hintEl.textContent = custLoans.length === 0
-    ? 'No active or overdue loans for this client.'
-    : '';
+    const custLoans = cache.loans.filter(l =>
+      l.customerId === custId && (l.status === 'active' || l.status === 'overdue')
+    );
+    loanSelect.innerHTML = '<option value="" disabled selected>Choose a loan record...</option>';
+    custLoans.forEach(l => {
+      const opt = document.createElement('option');
+      opt.value = l.id;
+      opt.textContent = `${l.id} — ${formatCurrency(l.remainingAmount)} outstanding (${l.status})`;
+      loanSelect.appendChild(opt);
+    });
+    if (hintEl) hintEl.textContent = custLoans.length === 0
+      ? 'No active or overdue loans for this client.'
+      : '';
+  } else {
+    custHidden.value = '';
+    if (custGroup) custGroup.style.display = 'block';
+    if (custSelect) {
+      custSelect.innerHTML = '<option value="" disabled selected>Choose a client...</option>';
+      cache.users.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.name} (${c.id})`;
+        custSelect.appendChild(opt);
+      });
+    }
+    document.getElementById('adjust-penalty-client-desc').textContent =
+      'Select a client and add a manual penalty charge to one of their loans.';
+    loanSelect.innerHTML = '<option value="" disabled selected>Choose a loan record...</option>';
+    if (hintEl) hintEl.textContent = 'Select a client first to see their loans.';
+  }
 
   document.getElementById('adjust-penalty-amount').value = '';
   modal.style.display = 'flex';
@@ -1429,6 +1505,29 @@ function wireAdjustPenaltyModal() {
   document.getElementById('btn-close-adjust-penalty-modal')?.addEventListener('click', () => {
     document.getElementById('adjust-penalty-modal').style.display = 'none';
   });
+
+  const custSelect = document.getElementById('adjust-penalty-cust-select');
+  if (custSelect) {
+    custSelect.addEventListener('change', () => {
+      const custId = custSelect.value;
+      const loanSelect = document.getElementById('adjust-penalty-loan-select');
+      const hintEl = document.getElementById('adjust-penalty-loan-hint');
+      const custLoans = cache.loans.filter(l =>
+        l.customerId === custId && (l.status === 'active' || l.status === 'overdue')
+      );
+      loanSelect.innerHTML = '<option value="" disabled selected>Choose a loan record...</option>';
+      custLoans.forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = l.id;
+        opt.textContent = `${l.id} — ${formatCurrency(l.remainingAmount)} outstanding (${l.status})`;
+        loanSelect.appendChild(opt);
+      });
+      if (hintEl) hintEl.textContent = custLoans.length === 0
+        ? 'No active or overdue loans for this client.'
+        : '';
+      document.getElementById('adjust-penalty-cust-id').value = custId;
+    });
+  }
 
   const form = document.getElementById('admin-adjust-penalty-form');
   if (!form) return;

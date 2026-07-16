@@ -300,73 +300,24 @@
           <p>Add new customers, adjust borrow limits, search, and manage portfolios.</p>
         </div>
 
-        <div class="loan-application-grid">
-          <!-- Add Customer Form -->
-          <form id="admin-add-customer-form" class="dashboard-card">
-            <h3>Register New Customer</h3>
-            
-            <div class="form-group">
-              <label for="cust-name">Customer Full Name</label>
-              <div class="input-wrapper">
-                <i data-lucide="user" class="input-icon"></i>
-                <input type="text" id="cust-name" placeholder="Enter Full Name" required>
-              </div>
-            </div>
+        <!-- Secondary Action Nav -->
+        <div class="clients-secondary-nav">
+          <button class="btn btn-primary" id="btn-open-add-borrower-modal">
+            <i data-lucide="user-plus"></i>
+            <span>Add New Borrower</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-open-issue-loan-modal">
+            <i data-lucide="banknote"></i>
+            <span>Issue Loan</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-open-adjust-penalty-modal">
+            <i data-lucide="alert-triangle"></i>
+            <span>Add Penalty</span>
+          </button>
+        </div>
 
-            <div class="form-group">
-              <label for="cust-phone">Phone Number</label>
-              <div class="input-wrapper input-wrapper-noicon">
-                <input type="tel" id="cust-phone" placeholder="e.g. +1 (555) 019-9944" required>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="cust-id">National ID / Unique Account ID</label>
-              <div class="input-wrapper">
-                <i data-lucide="file-text" class="input-icon"></i>
-                <input type="text" id="cust-id" placeholder="Optional ID (will auto-generate if blank)">
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="cust-national-id">National ID / Government ID <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
-              <div class="input-wrapper">
-                <i data-lucide="id-card" class="input-icon"></i>
-                <input type="text" id="cust-national-id" placeholder="e.g. 12345678 (leave blank to skip)">
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="cust-pin">Access PIN (for Client Login)</label>
-              <div class="input-wrapper">
-                <i data-lucide="lock" class="input-icon"></i>
-                <input type="password" id="cust-pin" placeholder="Enter PIN (4-8 digits)" required maxlength="8">
-                <button type="button" class="btn-icon-toggle toggle-pin-visibility" aria-label="Toggle PIN Visibility">
-                  <i data-lucide="eye" class="pin-eye-icon"></i>
-                </button>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <div class="slider-label-row">
-                <label for="cust-limit">Assigned Borrow Limit</label>
-                <span class="value-display" id="cust-limit-val">KSh 5,000</span>
-              </div>
-              <input type="range" id="cust-limit" min="1000" max="200000" step="1000" value="5000" class="range-slider">
-              <div class="slider-bounds">
-                <span>Min: KSh 1,000</span>
-                <span>Max: KSh 200,000</span>
-              </div>
-            </div>
-
-            <button type="submit" class="btn btn-primary btn-block">
-              <span>Register Customer</span>
-              <i data-lucide="user-plus"></i>
-            </button>
-          </form>
-
-          <!-- Customer Table and Search -->
-          <div class="dashboard-card list-box">
+        <!-- Customer Table and Search -->
+        <div class="dashboard-card list-box">
             <div class="search-title-bar flex-column align-start gap-4">
               <h3>Customer Database</h3>
               <div class="ledger-filter-row">
@@ -405,7 +356,6 @@
               </table>
             </div>
           </div>
-        </div>
       </section>
 
       <!-- 3. LOANS LEDGER VIEW -->
@@ -996,79 +946,188 @@
     </div>
   </div>
 
-  <!-- ================= ISSUE DIRECT LOAN MODAL ================= -->
-  <div id="issue-loan-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-card">
-      <div class="modal-title">Issue Loan to Client</div>
-      <div class="modal-desc" id="issue-loan-client-desc">Disburse a new loan directly, without a client-submitted application.</div>
-
-      <form id="admin-issue-loan-form" style="width: 100%; display: flex; flex-direction: column; gap: 16px;">
-        <input type="hidden" id="issue-loan-cust-id">
-
-        <div class="form-group" style="text-align: left;">
-          <label for="issue-loan-type-select">Loan Type</label>
-          <select id="issue-loan-type-select" required>
-            <option value="" disabled selected>Choose a loan type...</option>
-          </select>
+  <!-- ================= ADD NEW BORROWER MODAL ================= -->
+  <div id="add-borrower-modal" class="modal-overlay settings-overlay" style="display: none;">
+    <div class="modal-card settings-modal-card">
+      <div class="settings-header">
+        <div>
+          <div class="modal-title">Register New Borrower</div>
+          <div class="modal-desc">Add a new customer to the client database.</div>
         </div>
+        <button type="button" class="settings-close-btn" id="btn-close-add-borrower-modal" title="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
 
-        <div class="form-group" style="text-align: left;">
-          <label for="issue-loan-amount">Amount to Disburse (KSh)</label>
-          <div class="input-wrapper">
-            <i data-lucide="banknote" class="input-icon"></i>
-            <input type="number" id="issue-loan-amount" placeholder="0.00" min="1" step="any" required style="padding-left: 44px;">
+      <div class="modal-body-scroll">
+        <form id="admin-add-customer-form" class="full-screen-form">
+          <div class="form-group">
+            <label for="cust-name">Customer Full Name</label>
+            <div class="input-wrapper">
+              <i data-lucide="user" class="input-icon"></i>
+              <input type="text" id="cust-name" placeholder="Enter Full Name" required>
+            </div>
           </div>
-          <span class="help-text" id="issue-loan-limit-hint">Select a loan type to continue.</span>
-        </div>
 
-        <div id="issue-loan-preview" style="display:none; background: var(--card-bg, #fff); border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; color: var(--text-secondary, #64748b); border: 1px solid var(--border-color); flex-direction: column; gap: 4px;">
-          <div><strong style="color: var(--text-primary);">Total Repayable:</strong> <span id="issue-loan-total-value" style="font-weight:600; color: var(--primary-color);"></span></div>
-          <div><strong style="color: var(--text-primary);">Due Date:</strong> <span id="issue-loan-due-value" style="font-weight:600; color: var(--primary-color);"></span></div>
-        </div>
+          <div class="form-group">
+            <label for="cust-phone">Phone Number</label>
+            <div class="input-wrapper input-wrapper-noicon">
+              <input type="tel" id="cust-phone" placeholder="e.g. +1 (555) 019-9944" required>
+            </div>
+          </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn" style="border: 1px solid var(--border-color); flex: 1;" id="btn-close-issue-loan-modal">Cancel</button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;" id="btn-submit-issue-loan">
-            <span>Issue Loan</span>
-          </button>
+          <div class="form-group">
+            <label for="cust-id">National ID / Unique Account ID</label>
+            <div class="input-wrapper">
+              <i data-lucide="file-text" class="input-icon"></i>
+              <input type="text" id="cust-id" placeholder="Optional ID (will auto-generate if blank)">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="cust-national-id">National ID / Government ID <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+            <div class="input-wrapper">
+              <i data-lucide="id-card" class="input-icon"></i>
+              <input type="text" id="cust-national-id" placeholder="e.g. 12345678 (leave blank to skip)">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="cust-pin">Access PIN (for Client Login)</label>
+            <div class="input-wrapper">
+              <i data-lucide="lock" class="input-icon"></i>
+              <input type="password" id="cust-pin" placeholder="Enter PIN (4-8 digits)" required maxlength="8">
+              <button type="button" class="btn-icon-toggle toggle-pin-visibility" aria-label="Toggle PIN Visibility">
+                <i data-lucide="eye" class="pin-eye-icon"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="cust-limit">Assigned Borrow Limit (KSh)</label>
+            <div class="input-wrapper">
+              <i data-lucide="banknote" class="input-icon"></i>
+              <input type="number" id="cust-limit" placeholder="e.g. 5000" min="1000" max="200000" step="1000" value="5000" required style="padding-left: 44px;">
+            </div>
+            <span class="help-text">Min: KSh 1,000 — Max: KSh 200,000</span>
+          </div>
+
+          <div class="modal-footer" style="justify-content: flex-end; margin-top: 16px;">
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="user-plus"></i>
+              <span>Register Borrower</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ISSUE DIRECT LOAN MODAL ================= -->
+  <div id="issue-loan-modal" class="modal-overlay settings-overlay" style="display: none;">
+    <div class="modal-card settings-modal-card">
+      <div class="settings-header">
+        <div>
+          <div class="modal-title">Issue Loan to Client</div>
+          <div class="modal-desc" id="issue-loan-client-desc">Disburse a new loan directly, without a client-submitted application.</div>
         </div>
-      </form>
+        <button type="button" class="settings-close-btn" id="btn-close-issue-loan-modal" title="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body-scroll">
+        <form id="admin-issue-loan-form" class="full-screen-form">
+          <input type="hidden" id="issue-loan-cust-id">
+
+          <div class="form-group" style="text-align: left;" id="issue-loan-client-group">
+            <label for="issue-loan-cust-select">Select Client</label>
+            <select id="issue-loan-cust-select">
+              <option value="" disabled selected>Choose a client...</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="text-align: left;">
+            <label for="issue-loan-type-select">Loan Type</label>
+            <select id="issue-loan-type-select" required>
+              <option value="" disabled selected>Choose a loan type...</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="text-align: left;">
+            <label for="issue-loan-amount">Amount to Disburse (KSh)</label>
+            <div class="input-wrapper">
+              <i data-lucide="banknote" class="input-icon"></i>
+              <input type="number" id="issue-loan-amount" placeholder="0.00" min="1" step="any" required style="padding-left: 44px;">
+            </div>
+            <span class="help-text" id="issue-loan-limit-hint">Select a loan type to continue.</span>
+          </div>
+
+          <div id="issue-loan-preview" style="display:none; background: var(--card-bg, #fff); border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; color: var(--text-secondary, #64748b); border: 1px solid var(--border-color); flex-direction: column; gap: 4px;">
+            <div><strong style="color: var(--text-primary);">Total Repayable:</strong> <span id="issue-loan-total-value" style="font-weight:600; color: var(--primary-color);"></span></div>
+            <div><strong style="color: var(--text-primary);">Due Date:</strong> <span id="issue-loan-due-value" style="font-weight:600; color: var(--primary-color);"></span></div>
+          </div>
+
+          <div class="modal-footer" style="justify-content: flex-end; margin-top: 16px;">
+            <button type="submit" class="btn btn-primary" id="btn-submit-issue-loan">
+              <i data-lucide="banknote"></i>
+              <span>Issue Loan</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 
   <!-- ================= ADJUST PENALTY MODAL ================= -->
-  <div id="adjust-penalty-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-card">
-      <div class="modal-title">Adjust Client Penalty</div>
-      <div class="modal-desc" id="adjust-penalty-client-desc">Manually add a penalty charge to one of this client's loans.</div>
-
-      <form id="admin-adjust-penalty-form" style="width: 100%; display: flex; flex-direction: column; gap: 16px;">
-        <input type="hidden" id="adjust-penalty-cust-id">
-
-        <div class="form-group" style="text-align: left;">
-          <label for="adjust-penalty-loan-select">Select Loan</label>
-          <select id="adjust-penalty-loan-select" required>
-            <option value="" disabled selected>Choose a loan record...</option>
-          </select>
-          <span class="help-text" id="adjust-penalty-loan-hint">No active or overdue loans for this client.</span>
+  <div id="adjust-penalty-modal" class="modal-overlay settings-overlay" style="display: none;">
+    <div class="modal-card settings-modal-card">
+      <div class="settings-header">
+        <div>
+          <div class="modal-title">Adjust Client Penalty</div>
+          <div class="modal-desc" id="adjust-penalty-client-desc">Manually add a penalty charge to one of this client's loans.</div>
         </div>
+        <button type="button" class="settings-close-btn" id="btn-close-adjust-penalty-modal" title="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
 
-        <div class="form-group" style="text-align: left;">
-          <label for="adjust-penalty-amount">Penalty Amount to Add (KSh)</label>
-          <div class="input-wrapper">
-            <i data-lucide="alert-triangle" class="input-icon"></i>
-            <input type="number" id="adjust-penalty-amount" placeholder="0.00" min="1" step="any" required style="padding-left: 44px;">
+      <div class="modal-body-scroll">
+        <form id="admin-adjust-penalty-form" class="full-screen-form">
+          <input type="hidden" id="adjust-penalty-cust-id">
+
+          <div class="form-group" style="text-align: left;" id="adjust-penalty-client-group">
+            <label for="adjust-penalty-cust-select">Select Client</label>
+            <select id="adjust-penalty-cust-select">
+              <option value="" disabled selected>Choose a client...</option>
+            </select>
           </div>
-          <span class="help-text">This is added on top of the outstanding balance and any auto-applied penalty.</span>
-        </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn" style="border: 1px solid var(--border-color); flex: 1;" id="btn-close-adjust-penalty-modal">Cancel</button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;" id="btn-submit-adjust-penalty">
-            <span>Add Penalty</span>
-          </button>
-        </div>
-      </form>
+          <div class="form-group" style="text-align: left;">
+            <label for="adjust-penalty-loan-select">Select Loan</label>
+            <select id="adjust-penalty-loan-select" required>
+              <option value="" disabled selected>Choose a loan record...</option>
+            </select>
+            <span class="help-text" id="adjust-penalty-loan-hint">No active or overdue loans for this client.</span>
+          </div>
+
+          <div class="form-group" style="text-align: left;">
+            <label for="adjust-penalty-amount">Penalty Amount to Add (KSh)</label>
+            <div class="input-wrapper">
+              <i data-lucide="alert-triangle" class="input-icon"></i>
+              <input type="number" id="adjust-penalty-amount" placeholder="0.00" min="1" step="any" required style="padding-left: 44px;">
+            </div>
+            <span class="help-text">This is added on top of the outstanding balance and any auto-applied penalty.</span>
+          </div>
+
+          <div class="modal-footer" style="justify-content: flex-end; margin-top: 16px;">
+            <button type="submit" class="btn btn-primary" id="btn-submit-adjust-penalty">
+              <i data-lucide="alert-triangle"></i>
+              <span>Add Penalty</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 
