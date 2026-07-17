@@ -220,7 +220,7 @@
     <main class="main-content">
       
       <!-- 1. HOME VIEW (OVERVIEW STATS) -->
-      <section id="admin-view-home" class="app-view">
+      <section id="admin-view-home" class="app-view active">
         <div class="welcome-banner admin-banner">
           <div class="welcome-text">
             <h2>Welcome back, Administrator</h2>
@@ -309,7 +309,7 @@
       <section id="admin-view-customers" class="app-view">
         <div class="view-header">
           <h1>Client Portfolio Registry</h1>
-          <p>Add new customers, adjust borrow limits, search, and manage portfolios.</p>
+          <p>Add new customers, search, and manage portfolios.</p>
         </div>
 
         <!-- Secondary Action Nav -->
@@ -317,10 +317,6 @@
           <button class="btn btn-primary" id="btn-open-add-borrower-modal">
             <i data-lucide="user-plus"></i>
             <span>Add New Borrower</span>
-          </button>
-          <button class="btn btn-secondary" id="btn-open-issue-loan-modal">
-            <i data-lucide="banknote"></i>
-            <span>Issue Loan</span>
           </button>
           <button class="btn btn-secondary" id="btn-open-adjust-penalty-modal">
             <i data-lucide="alert-triangle"></i>
@@ -335,7 +331,7 @@
               <div class="ledger-filter-row">
                 <div class="search-wrapper flex-grow">
                   <i data-lucide="search"></i>
-                  <input type="text" id="cust-search" placeholder="Search by name or ID...">
+                  <input type="text" id="cust-search" placeholder="Search by name, phone, or national ID...">
                 </div>
                 <div class="filter-pill-box">
                   <button class="filter-pill active" data-cust-filter="all">All</button>
@@ -351,13 +347,11 @@
               <table class="loans-table">
                 <thead>
                   <tr>
-                    <th>System ID</th>
                     <th>Name</th>
                     <th>Phone</th>
                     <th>National ID</th>
                     <th>Loans</th>
                     <th>Penalty</th>
-                    <th>Limit</th>
                     <th>Date Added</th>
                     <th>Actions</th>
                   </tr>
@@ -496,162 +490,47 @@
         </div>
       </section>
 
-      <!-- 5. LOAN APPLICATIONS VIEW -->
-      <section id="admin-view-applications" class="app-view">
-        <div class="view-header">
-          <h1>Loan Applications</h1>
-          <p>Review client loan requests and update their approval status with a reason.</p>
-        </div>
 
-        <div class="dashboard-card list-box">
-          <div class="search-title-bar flex-column align-start gap-4">
-            <h3>Pending & Reviewed Applications</h3>
-            <div class="ledger-filter-row">
-              <div class="search-wrapper" style="max-width: 240px;">
-                <i data-lucide="search"></i>
-                <input type="text" id="applications-search" placeholder="Search by name or loan ID...">
-              </div>
-              <div class="filter-pill-box">
-                <button class="filter-pill active" data-app-filter="all">All</button>
-                <button class="filter-pill" data-app-filter="pending">Pending</button>
-                <button class="filter-pill" data-app-filter="approved">Approved</button>
-                <button class="filter-pill" data-app-filter="declined">Declined</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="table-responsive">
-            <table class="loans-table">
-              <thead>
-                <tr>
-                  <th>Loan ID</th>
-                  <th>Client</th>
-                  <th>Type</th>
-                  <th>Amount</th>
-                  <th>Term</th>
-                  <th>Applied</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="admin-applications-table-body">
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- 6. LOAN SETTINGS VIEW -->
-      <section id="admin-view-loan-settings" class="app-view">
-        <div class="view-header">
-          <h1>Loan Type Settings</h1>
-          <p>Define the loan products offered to clients. These types appear in the client loan application form.</p>
-        </div>
-
-        <div class="loan-application-grid">
-          <!-- Add Loan Type Form -->
-          <form id="admin-add-loan-type-form" class="dashboard-card">
-            <h3>Add New Loan Type</h3>
-
-            <div class="form-group">
-              <label for="lt-name">Loan Type Name</label>
-              <div class="input-wrapper">
-                <i data-lucide="tag" class="input-icon"></i>
-                <input type="text" id="lt-name" placeholder="e.g. Personal Loan, Business Loan" required>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="lt-term">Repayment Term (months)</label>
-              <div class="input-wrapper">
-                <i data-lucide="calendar" class="input-icon"></i>
-                <input type="number" id="lt-term" placeholder="e.g. 6" min="1" max="120" required>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="lt-interest">Interest Rate (%)</label>
-              <div class="input-wrapper">
-                <i data-lucide="percent" class="input-icon"></i>
-                <input type="number" id="lt-interest" placeholder="e.g. 8.5" min="0" max="100" step="0.1" required>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label for="lt-desc">Short Description <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
-              <div class="input-wrapper">
-                <i data-lucide="file-text" class="input-icon"></i>
-                <input type="text" id="lt-desc" placeholder="e.g. For business growth needs">
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Late Payment Penalty Type</label>
-              <div class="payment-methods-grid" style="grid-template-columns: repeat(3, 1fr);">
-                <label class="pay-method-option">
-                  <input type="radio" name="lt-penalty-type" value="none" checked>
-                  <span class="method-box">
-                    <i data-lucide="ban"></i>
-                    <span>No Penalty</span>
-                  </span>
-                </label>
-                <label class="pay-method-option">
-                  <input type="radio" name="lt-penalty-type" value="daily">
-                  <span class="method-box">
-                    <i data-lucide="calendar-clock"></i>
-                    <span>Daily Charge</span>
-                  </span>
-                </label>
-                <label class="pay-method-option">
-                  <input type="radio" name="lt-penalty-type" value="flat">
-                  <span class="method-box">
-                    <i data-lucide="badge-alert"></i>
-                    <span>One-Time Fee</span>
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <div class="form-group" id="lt-penalty-amount-group" style="display: none;">
-              <label for="lt-penalty-amount" id="lt-penalty-amount-label">Penalty Amount (KSh)</label>
-              <div class="input-wrapper">
-                <i data-lucide="alert-triangle" class="input-icon"></i>
-                <input type="number" id="lt-penalty-amount" placeholder="e.g. 100" min="0" step="any">
-              </div>
-              <span class="help-text" id="lt-penalty-amount-hint">Charged automatically once a loan of this type becomes overdue.</span>
-            </div>
-
-            <button type="submit" class="btn btn-primary btn-block">
-              <span>Add Loan Type</span>
-              <i data-lucide="plus-circle"></i>
-            </button>
-          </form>
-
-          <!-- Loan Types List -->
-          <div class="dashboard-card list-box">
-            <div class="search-title-bar">
-              <h3>Active Loan Products</h3>
-            </div>
-            <div id="admin-loan-types-list">
-              <div class="empty-state">
-                <i data-lucide="package"></i>
-                <p>No loan types configured yet.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
     </main>
 
+    <!-- ================= FLOATING BOTTOM NAVIGATION ================= -->
+    <nav class="floating-bottom-nav">
+      <ul class="nav-links-list">
+        <li class="nav-item">
+          <button class="nav-link active" data-target-view="admin-view-home">
+            <i data-lucide="home"></i>
+            <span class="nav-label">Home</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-target-view="admin-view-customers">
+            <i data-lucide="users"></i>
+            <span class="nav-label">Clients</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-target-view="admin-view-loans">
+            <i data-lucide="coins"></i>
+            <span class="nav-label">Loans</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-target-view="admin-view-payments">
+            <i data-lucide="receipt"></i>
+            <span class="nav-label">Payments</span>
+          </button>
+        </li>
 
+      </ul>
+    </nav>
   </div>
 
   <!-- ================= EDIT CLIENT MODAL ================= -->
   <div id="edit-customer-modal" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <div class="modal-title">Edit Customer Profile</div>
-      <div class="modal-desc">Modify personal registry details and credit limits below.</div>
+      <div class="modal-desc">Modify personal registry details below.</div>
       
       <form id="admin-edit-customer-form" style="width: 100%; display: flex; flex-direction: column; gap: 16px;">
         <input type="hidden" id="edit-cust-uid">
@@ -669,19 +548,6 @@
         <div class="form-group" style="text-align: left;">
           <label for="edit-cust-national-id">National ID <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
           <input type="text" id="edit-cust-national-id" class="setting-input" style="padding-left: 16px;" placeholder="e.g. 12345678">
-        </div>
-
-        <div class="form-group" style="text-align: left;">
-          <label for="edit-cust-pin">Login PIN code</label>
-          <input type="password" id="edit-cust-pin" required maxlength="8" class="setting-input" style="padding-left: 16px;">
-        </div>
-
-        <div class="form-group" style="text-align: left;">
-          <div class="slider-label-row">
-            <label for="edit-cust-limit">Borrow Limit</label>
-            <span class="value-display" id="edit-cust-limit-val">KSh 5,000</span>
-          </div>
-          <input type="range" id="edit-cust-limit" min="1000" max="200000" step="1000" class="range-slider">
         </div>
 
         <div class="modal-footer">
@@ -770,7 +636,7 @@
 
           <div class="backup-info-box">
             <i data-lucide="info" style="width:16px;height:16px;flex-shrink:0;"></i>
-            <span>Backups export all customers, loans, repayments, loan types and applications to a single JSON file. Restoring will overwrite existing data with the contents of the file.</span>
+            <span>Backups export all customers, loans and repayments to a single JSON file. Restoring will overwrite existing data with the contents of the file.</span>
           </div>
 
           <div class="form-group">
@@ -862,78 +728,13 @@
     </div>
   </div>
 
-  <!-- ================= LOAN APPLICATION STATUS MODAL ================= -->
-  <div id="app-status-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-card">
-      <div class="modal-title" id="app-status-modal-title">Review Loan Application</div>
-      <div class="modal-desc" id="app-status-modal-desc">Update the status of this loan application.</div>
-
-      <div style="width: 100%; display: flex; flex-direction: column; gap: 16px;">
-        <input type="hidden" id="app-status-loan-id">
-
-        <div class="form-group" style="text-align: left;">
-          <label>Update Status</label>
-          <div class="payment-methods-grid">
-            <label class="pay-method-option">
-              <input type="radio" name="app-status-choice" value="approved">
-              <span class="method-box">
-                <i data-lucide="check-circle"></i>
-                <span>Approve</span>
-              </span>
-            </label>
-            <label class="pay-method-option">
-              <input type="radio" name="app-status-choice" value="declined">
-              <span class="method-box">
-                <i data-lucide="x-circle"></i>
-                <span>Decline</span>
-              </span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Disbursal section — only visible when Approve is selected -->
-        <div id="app-disbursal-section" style="display: none; background: rgba(var(--primary-rgb, 79,70,229),0.06); border: 1px solid rgba(var(--primary-rgb, 79,70,229),0.18); border-radius: 12px; padding: 16px; display: none; flex-direction: column; gap: 14px;">
-          <div style="display: flex; align-items: center; gap: 8px; color: var(--primary-color); font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em;">
-            <i data-lucide="banknote" style="width:16px;height:16px;"></i>
-            <span>Disbursal Details</span>
-          </div>
-
-          <div class="form-group" style="text-align: left; margin: 0;">
-            <label for="app-disbursal-amount" style="font-size:0.8rem;">Amount Physically Sent to Client (KSh)</label>
-            <div class="input-wrapper">
-              <i data-lucide="landmark" class="input-icon"></i>
-              <input type="number" id="app-disbursal-amount" placeholder="0.00" min="1" step="any" class="" style="padding-left: 44px;">
-            </div>
-            <span class="help-text" id="app-disbursal-hint" style="font-size:0.78rem;">Enter the exact amount sent to the client. This becomes their opening loan balance.</span>
-          </div>
-
-          <div id="app-due-date-preview" style="display:none; background: var(--card-bg, #fff); border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; color: var(--text-secondary, #64748b); border: 1px solid var(--border-color);">
-            <strong style="color: var(--text-primary);">Due Date:</strong>
-            <span id="app-due-date-value" style="margin-left: 6px; font-weight: 600; color: var(--primary-color);"></span>
-            <span style="margin-left: 6px;" id="app-due-date-term-label"></span>
-          </div>
-        </div>
-
-        <div class="form-group" style="text-align: left;">
-          <label for="app-status-reason">Reason / Note <span style="font-weight:400;text-transform:none;letter-spacing:0;">(visible to client)</span></label>
-          <textarea id="app-status-reason" rows="3" class="setting-input" style="padding: 12px 16px; resize: vertical; font-family: inherit;" placeholder="e.g. Application approved. Funds will be disbursed within 24 hours."></textarea>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn" style="border: 1px solid var(--border-color); flex: 1;" id="btn-close-app-status-modal">Cancel</button>
-        <button type="button" class="btn btn-primary" style="flex: 1;" id="btn-submit-app-status">Save Status</button>
-      </div>
-    </div>
-  </div>
-
   <!-- ================= ADD NEW BORROWER MODAL ================= -->
   <div id="add-borrower-modal" class="modal-overlay settings-overlay" style="display: none;">
     <div class="modal-card settings-modal-card">
       <div class="settings-header">
         <div>
-          <div class="modal-title">Register New Borrower</div>
-          <div class="modal-desc">Add a new customer to the client database.</div>
+          <div class="modal-title">Create New Borrower & Loan</div>
+          <div class="modal-desc">Register a new client and issue their first loan.</div>
         </div>
         <button type="button" class="settings-close-btn" id="btn-close-add-borrower-modal" title="Close">
           <i data-lucide="x"></i>
@@ -943,7 +744,7 @@
       <div class="modal-body-scroll">
         <form id="admin-add-customer-form" class="full-screen-form">
           <div class="form-group">
-            <label for="cust-name">Customer Full Name</label>
+            <label for="cust-name">Borrower Full Name</label>
             <div class="input-wrapper">
               <i data-lucide="user" class="input-icon"></i>
               <input type="text" id="cust-name" placeholder="Enter Full Name" required>
@@ -953,131 +754,97 @@
           <div class="form-group">
             <label for="cust-phone">Phone Number</label>
             <div class="input-wrapper input-wrapper-noicon">
-              <input type="tel" id="cust-phone" placeholder="e.g. +1 (555) 019-9944" required>
+              <input type="tel" id="cust-phone" placeholder="e.g. +254 712 345 678" required>
             </div>
           </div>
 
           <div class="form-group">
-            <label for="cust-id">National ID / Unique Account ID</label>
-            <div class="input-wrapper">
-              <i data-lucide="file-text" class="input-icon"></i>
-              <input type="text" id="cust-id" placeholder="Optional ID (will auto-generate if blank)">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="cust-national-id">National ID / Government ID <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+            <label for="cust-national-id">National ID <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
             <div class="input-wrapper">
               <i data-lucide="id-card" class="input-icon"></i>
-              <input type="text" id="cust-national-id" placeholder="e.g. 12345678 (leave blank to skip)">
+              <input type="text" id="cust-national-id" placeholder="e.g. 12345678">
             </div>
           </div>
 
           <div class="form-group">
-            <label for="cust-pin">Access PIN (for Client Login)</label>
-            <div class="input-wrapper">
-              <i data-lucide="lock" class="input-icon"></i>
-              <input type="password" id="cust-pin" placeholder="Enter PIN (4-8 digits)" required maxlength="8">
-              <button type="button" class="btn-icon-toggle toggle-pin-visibility" aria-label="Toggle PIN Visibility">
-                <i data-lucide="eye" class="pin-eye-icon"></i>
-              </button>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="cust-limit">Assigned Borrow Limit (KSh)</label>
+            <label for="cust-loan-amount">Loan Amount (KSh)</label>
             <div class="input-wrapper">
               <i data-lucide="banknote" class="input-icon"></i>
-              <input type="number" id="cust-limit" placeholder="e.g. 5000" min="1000" max="200000" step="1000" value="5000" required style="padding-left: 44px;">
+              <input type="number" id="cust-loan-amount" placeholder="e.g. 10000" min="1" step="any" required style="padding-left: 44px;">
             </div>
-            <span class="help-text">Min: KSh 1,000 — Max: KSh 200,000</span>
+          </div>
+
+          <div class="form-group">
+            <label for="cust-interest-rate">Interest Rate (%)</label>
+            <div class="input-wrapper">
+              <i data-lucide="percent" class="input-icon"></i>
+              <input type="number" id="cust-interest-rate" placeholder="e.g. 10" min="0" max="100" step="0.1" required>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="cust-repayment-period">Repayment Period</label>
+              <div class="input-wrapper">
+                <i data-lucide="clock" class="input-icon"></i>
+                <input type="number" id="cust-repayment-period" placeholder="e.g. 30" min="1" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="cust-period-unit">Period Unit</label>
+              <select id="cust-period-unit" class="setting-input" style="padding-left: 16px;" required>
+                <option value="days">Days</option>
+                <option value="weeks">Weeks</option>
+                <option value="months" selected>Months</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="cust-issue-date">Issue Date</label>
+              <div class="input-wrapper input-wrapper-noicon">
+                <input type="date" id="cust-issue-date" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="cust-due-date">Due Date (auto-calculated)</label>
+              <div class="input-wrapper input-wrapper-noicon">
+                <input type="date" id="cust-due-date" readonly style="background: var(--bg-secondary); cursor: not-allowed;">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="cust-penalty-amount">Daily Penalty Amount (KSh) <span style="font-weight:400;text-transform:none;letter-spacing:0;">(after due date)</span></label>
+            <div class="input-wrapper">
+              <i data-lucide="alert-triangle" class="input-icon"></i>
+              <input type="number" id="cust-penalty-amount" placeholder="e.g. 100" min="0" step="any" value="0" style="padding-left: 44px;">
+            </div>
+            <span class="help-text">Amount charged per day after the due date until fully repaid. Set to 0 for no penalty.</span>
+          </div>
+
+          <div id="cust-loan-preview" style="display:none; background: rgba(var(--primary-rgb, 79,70,229),0.06); border: 1px solid rgba(var(--primary-rgb, 79,70,229),0.18); border-radius: 12px; padding: 14px; font-size: 0.85rem; color: var(--text-secondary, #64748b); flex-direction: column; gap: 6px; margin-top: 4px;">
+            <div style="display: flex; align-items: center; gap: 8px; color: var(--primary-color); font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;">
+              <i data-lucide="calculator" style="width:14px;height:14px;"></i>
+              <span>Loan Summary</span>
+            </div>
+            <div><strong style="color: var(--text-primary);">Principal:</strong> <span id="preview-principal" style="font-weight:600; color: var(--primary-color);"></span></div>
+            <div><strong style="color: var(--text-primary);">Total Repayable:</strong> <span id="preview-total" style="font-weight:600; color: var(--primary-color);"></span></div>
+            <div><strong style="color: var(--text-primary);">Due Date:</strong> <span id="preview-due-date" style="font-weight:600; color: var(--primary-color);"></span></div>
           </div>
 
           <div class="modal-footer" style="justify-content: flex-end; margin-top: 16px;">
             <button type="submit" class="btn btn-primary">
               <i data-lucide="user-plus"></i>
-              <span>Register Borrower</span>
-            </button>
-          </div>
-        </form>
-
-        <div id="borrower-reg-success" style="display:none; flex-direction:column; align-items:center; gap:16px; padding:32px 16px; text-align:center;">
-          <div style="width:56px;height:56px;border-radius:50%;background:rgba(34,197,94,0.12);display:flex;align-items:center;justify-content:center;">
-            <i data-lucide="check-circle" style="width:32px;height:32px;color:var(--success-color,#22c55e);"></i>
-          </div>
-          <div>
-            <h3 style="margin:0 0 4px;">Borrower Registered</h3>
-            <p id="borrower-reg-success-id" style="margin:0;color:var(--text-secondary);font-size:0.85rem;"></p>
-          </div>
-          <div style="display:flex;gap:12px;width:100%;max-width:320px;">
-            <button type="button" class="btn btn-secondary" id="borrower-reg-done-btn" style="flex:1;">
-              <span>Done</span>
-            </button>
-            <button type="button" class="btn btn-primary" id="borrower-reg-issue-loan-btn" style="flex:1;">
-              <i data-lucide="banknote"></i>
-              <span>Issue Loan</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= ISSUE DIRECT LOAN MODAL ================= -->
-  <div id="issue-loan-modal" class="modal-overlay settings-overlay" style="display: none;">
-    <div class="modal-card settings-modal-card">
-      <div class="settings-header">
-        <div>
-          <div class="modal-title">Issue Loan to Client</div>
-          <div class="modal-desc" id="issue-loan-client-desc">Disburse a new loan directly, without a client-submitted application.</div>
-        </div>
-        <button type="button" class="settings-close-btn" id="btn-close-issue-loan-modal" title="Close">
-          <i data-lucide="x"></i>
-        </button>
-      </div>
-
-      <div class="modal-body-scroll">
-        <form id="admin-issue-loan-form" class="full-screen-form">
-          <input type="hidden" id="issue-loan-cust-id">
-
-          <div class="form-group" style="text-align: left;" id="issue-loan-client-group">
-            <label for="issue-loan-cust-select">Select Client</label>
-            <select id="issue-loan-cust-select">
-              <option value="" disabled selected>Choose a client...</option>
-            </select>
-          </div>
-
-          <div class="form-group" style="text-align: left;">
-            <label for="issue-loan-type-select">Loan Type</label>
-            <select id="issue-loan-type-select" required>
-              <option value="" disabled selected>Choose a loan type...</option>
-            </select>
-          </div>
-
-          <div class="form-group" style="text-align: left;">
-            <label for="issue-loan-amount">Amount to Disburse (KSh)</label>
-            <div class="input-wrapper">
-              <i data-lucide="banknote" class="input-icon"></i>
-              <input type="number" id="issue-loan-amount" placeholder="0.00" min="1" step="any" required style="padding-left: 44px;">
-            </div>
-            <span class="help-text" id="issue-loan-limit-hint">Select a loan type to continue.</span>
-          </div>
-
-          <div id="issue-loan-preview" style="display:none; background: var(--card-bg, #fff); border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; color: var(--text-secondary, #64748b); border: 1px solid var(--border-color); flex-direction: column; gap: 4px;">
-            <div><strong style="color: var(--text-primary);">Total Repayable:</strong> <span id="issue-loan-total-value" style="font-weight:600; color: var(--primary-color);"></span></div>
-            <div><strong style="color: var(--text-primary);">Due Date:</strong> <span id="issue-loan-due-value" style="font-weight:600; color: var(--primary-color);"></span></div>
-          </div>
-
-          <div class="modal-footer" style="justify-content: flex-end; margin-top: 16px;">
-            <button type="submit" class="btn btn-primary" id="btn-submit-issue-loan">
-              <i data-lucide="banknote"></i>
-              <span>Issue Loan</span>
+              <span>Create Borrower</span>
             </button>
           </div>
         </form>
       </div>
     </div>
   </div>
+
 
   <!-- ================= ADJUST PENALTY MODAL ================= -->
   <div id="adjust-penalty-modal" class="modal-overlay settings-overlay" style="display: none;">
@@ -1124,6 +891,154 @@
             <button type="submit" class="btn btn-primary" id="btn-submit-adjust-penalty">
               <i data-lucide="alert-triangle"></i>
               <span>Add Penalty</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= EDIT DAILY PENALTY MODAL ================= -->
+  <div id="edit-daily-penalty-modal" class="modal-overlay settings-overlay" style="display: none;">
+    <div class="modal-card settings-modal-card">
+      <div class="settings-header">
+        <div>
+          <div class="modal-title">Edit Daily Penalty</div>
+          <div class="modal-desc" id="edit-daily-penalty-client-desc">Change the daily penalty amount on an active loan.</div>
+        </div>
+        <button type="button" class="settings-close-btn" id="btn-close-edit-daily-penalty-modal" title="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body-scroll">
+        <form id="admin-edit-daily-penalty-form" class="full-screen-form">
+          <input type="hidden" id="edit-daily-penalty-cust-id">
+
+          <div class="form-group">
+            <label for="edit-daily-penalty-loan-select">Select Active Loan</label>
+            <select id="edit-daily-penalty-loan-select" required>
+              <option value="" disabled selected>Choose a loan...</option>
+            </select>
+            <span class="help-text" id="edit-daily-penalty-loan-hint">No active or overdue loans for this client.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-daily-penalty-amount">Daily Penalty Amount (KSh)</label>
+            <div class="input-wrapper">
+              <i data-lucide="alert-triangle" class="input-icon"></i>
+              <input type="number" id="edit-daily-penalty-amount" placeholder="e.g. 100" min="0" step="any" required style="padding-left: 44px;">
+            </div>
+            <span class="help-text">Amount charged per day after the due date. Set to 0 to disable daily penalty.</span>
+          </div>
+
+          <div class="modal-footer" style="justify-content: flex-end; margin-top: 16px;">
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="save"></i>
+              <span>Save Penalty</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RENEW LOAN MODAL ================= -->
+  <div id="renew-loan-modal" class="modal-overlay settings-overlay" style="display: none;">
+    <div class="modal-card settings-modal-card">
+      <div class="settings-header">
+        <div>
+          <div class="modal-title">Renew Loan</div>
+          <div class="modal-desc" id="renew-loan-client-desc">Issue a new loan for this client.</div>
+        </div>
+        <button type="button" class="settings-close-btn" id="btn-close-renew-loan-modal" title="Close">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body-scroll">
+        <form id="admin-renew-loan-form" class="full-screen-form">
+          <input type="hidden" id="renew-loan-cust-id">
+
+          <div class="form-group">
+            <label>Borrower</label>
+            <div class="input-wrapper input-wrapper-noicon">
+              <input type="text" id="renew-loan-cust-name" readonly style="background: var(--bg-secondary); cursor: not-allowed;">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="renew-loan-amount">Loan Amount (KSh)</label>
+            <div class="input-wrapper">
+              <i data-lucide="banknote" class="input-icon"></i>
+              <input type="number" id="renew-loan-amount" placeholder="e.g. 10000" min="1" step="any" required style="padding-left: 44px;">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="renew-interest-rate">Interest Rate (%)</label>
+            <div class="input-wrapper">
+              <i data-lucide="percent" class="input-icon"></i>
+              <input type="number" id="renew-interest-rate" placeholder="e.g. 10" min="0" max="100" step="0.1" required>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="renew-repayment-period">Repayment Period</label>
+              <div class="input-wrapper">
+                <i data-lucide="clock" class="input-icon"></i>
+                <input type="number" id="renew-repayment-period" placeholder="e.g. 30" min="1" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="renew-period-unit">Period Unit</label>
+              <select id="renew-period-unit" class="setting-input" style="padding-left: 16px;" required>
+                <option value="days">Days</option>
+                <option value="weeks">Weeks</option>
+                <option value="months" selected>Months</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label for="renew-issue-date">Issue Date</label>
+              <div class="input-wrapper input-wrapper-noicon">
+                <input type="date" id="renew-issue-date" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="renew-due-date">Due Date (auto-calculated)</label>
+              <div class="input-wrapper input-wrapper-noicon">
+                <input type="date" id="renew-due-date" readonly style="background: var(--bg-secondary); cursor: not-allowed;">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="renew-penalty-amount">Daily Penalty Amount (KSh) <span style="font-weight:400;text-transform:none;letter-spacing:0;">(after due date)</span></label>
+            <div class="input-wrapper">
+              <i data-lucide="alert-triangle" class="input-icon"></i>
+              <input type="number" id="renew-penalty-amount" placeholder="e.g. 100" min="0" step="any" value="0" style="padding-left: 44px;">
+            </div>
+            <span class="help-text">Amount charged per day after the due date until fully repaid. Set to 0 for no penalty.</span>
+          </div>
+
+          <div id="renew-loan-preview" style="display:none; background: rgba(var(--primary-rgb, 79,70,229),0.06); border: 1px solid rgba(var(--primary-rgb, 79,70,229),0.18); border-radius: 12px; padding: 14px; font-size: 0.85rem; color: var(--text-secondary, #64748b); flex-direction: column; gap: 6px; margin-top: 4px;">
+            <div style="display: flex; align-items: center; gap: 8px; color: var(--primary-color); font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;">
+              <i data-lucide="calculator" style="width:14px;height:14px;"></i>
+              <span>Loan Summary</span>
+            </div>
+            <div><strong style="color: var(--text-primary);">Principal:</strong> <span id="renew-preview-principal" style="font-weight:600; color: var(--primary-color);"></span></div>
+            <div><strong style="color: var(--text-primary);">Total Repayable:</strong> <span id="renew-preview-total" style="font-weight:600; color: var(--primary-color);"></span></div>
+            <div><strong style="color: var(--text-primary);">Due Date:</strong> <span id="renew-preview-due-date" style="font-weight:600; color: var(--primary-color);"></span></div>
+          </div>
+
+          <div class="modal-footer" style="justify-content: flex-end; margin-top: 16px;">
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="refresh-cw"></i>
+              <span>Issue Renewed Loan</span>
             </button>
           </div>
         </form>

@@ -9,11 +9,9 @@
 //   meta/adminBootstrap   – one-time sentinel { initialized: true, initializedAt, by } written
 //                           alongside the very first (superadmin) admin doc; gates further
 //                           first-run setup attempts once it exists.
-//   users/{userId}        – client accounts { name, phone, nationalId, pin, limit, dateAdded }
+//   users/{userId}        – client accounts { name, phone, nationalId, dateAdded }
 //   loans/{loanId}        – loan records
 //   repayments/{repId}    – repayment logs
-//   loanTypes/{ltId}      – loan product definitions
-//   loanApplications/{id} – client applications
 
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
@@ -78,8 +76,6 @@ if (navigator.storage && navigator.storage.persist) {
 const usersCol        = collection(db, 'users');
 const loansCol        = collection(db, 'loans');
 const repaymentsCol   = collection(db, 'repayments');
-const loanTypesCol    = collection(db, 'loanTypes');
-const loanAppsCol     = collection(db, 'loanApplications');
 const adminsCol       = collection(db, 'admins');
 const bootstrapRef    = doc(db, 'meta', 'adminBootstrap');
 
@@ -88,15 +84,12 @@ const cache = {
   users:            [],
   loans:            [],
   repayments:       [],
-  loanTypes:        [],
-  loanApplications: [],
   currentAdmin:     null, // { uid, email, displayName, role } for the signed-in admin
   settings: { theme: 'light', font: 'sans', scale: 'medium' }
 };
 
 // ── Unsub handles for real-time listeners ─────────────────────────────────────
 let unsubUsers = null, unsubLoans = null, unsubRepayments = null;
-let unsubLoanTypes = null, unsubLoanApps = null;
 
 // Track which loans were already known to be overdue, so we only notify on NEW overdues
 let knownOverdueIds = new Set();
@@ -209,29 +202,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Loan filter / search / repay filters wired later in respective renderers
   wireLoanFilters();
   wireRepayFilters();
-  wireAppFilters();
-
-  // Limit sliders
-  wireSliders();
-
-  // Edit modal close
-  document.getElementById('btn-close-edit-modal')?.addEventListener('click', () => {
-    document.getElementById('edit-customer-modal').style.display = 'none';
-  });
-
-  // App-status modal
-  document.getElementById('btn-close-app-status-modal')?.addEventListener('click', () => {
-    document.getElementById('app-status-modal').style.display = 'none';
-  });
-
-  document.querySelectorAll('input[name="app-status-choice"]').forEach(r =>
-    r.addEventListener('change', updateDisbursalSection)
-  );
-
-  // Loan type penalty fields toggle
-  document.querySelectorAll('input[name="lt-penalty-type"]').forEach(r =>
-    r.addEventListener('change', updateLoanTypePenaltyFields)
-  );
 
   // Client status filters
   wireCustFilters();
@@ -305,50 +275,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  // ── Nav links ────────────────────────────────────────────────────────────────
+  document.querySelectorAll('#admin-container .nav-link').forEach(link => {
+    link.addEventListener('click', () => {
+      switchView(link.getAttribute('data-target-view'));
+    });
+  });
+
   // ── Form submissions ─────────────────────────────────────────────────────────
   wireAddCustomerForm();
   wireEditCustomerForm();
   wireRepaymentForm();
-  wireAddLoanTypeForm();
   wireEditCustomerModal();
-  wireAppStatusModal();
-  wireIssueLoanModal();
   wireAdjustPenaltyModal();
 
   // ── Clients secondary nav buttons ────────────────────────────────────────────
   document.getElementById('btn-open-add-borrower-modal')?.addEventListener('click', () => openAddBorrowerModal());
-  document.getElementById('btn-open-issue-loan-modal')?.addEventListener('click', () => openIssueLoanModal());
   document.getElementById('btn-open-adjust-penalty-modal')?.addEventListener('click', () => openAdjustPenaltyModal());
 
   // ── Close modals ─────────────────────────────────────────────────────────────
   document.getElementById('btn-close-add-borrower-modal')?.addEventListener('click', () => {
     document.getElementById('add-borrower-modal').style.display = 'none';
-    const form = document.getElementById('admin-add-customer-form');
-    const successScreen = document.getElementById('borrower-reg-success');
-    if (form) form.style.display = '';
-    if (successScreen) successScreen.style.display = 'none';
+    const p = document.getElementById('cust-penalty-amount'); if (p) p.value = '';
+  });
+  document.getElementById('btn-close-edit-modal')?.addEventListener('click', () => {
+    document.getElementById('edit-customer-modal').style.display = 'none';
   });
 
-  // ── Issue loan client selector → populate loans for selected client ──────────
-  document.getElementById('issue-loan-cust-select')?.addEventListener('change', (e) => {
-    const custId = e.target.value;
-    const custHidden = document.getElementById('issue-loan-cust-id');
-    if (custHidden) custHidden.value = custId;
-    const customer = cache.users.find(c => c.id === custId);
-    if (customer) {
-      document.getElementById('issue-loan-client-desc').textContent =
-        `Issue a new loan for ${customer.name} (${custId}). Borrow limit: ${formatCurrency(customer.limit)}.`;
-    }
+  // ── Add borrower form: due date calculation & loan preview ───────────────────
+  wireAddBorrowerFormPreview();
+
+  // ── Renew loan form wiring ──────────────────────────────────────────────────
+  wireRenewLoanForm();
+  document.getElementById('btn-close-renew-loan-modal')?.addEventListener('click', () => {
+    document.getElementById('renew-loan-modal').style.display = 'none';
+    const p = document.getElementById('renew-penalty-amount'); if (p) p.value = '';
+  });
+
+  // ── Edit daily penalty form wiring ──────────────────────────────────────────
+  wireEditDailyPenaltyModal();
+  document.getElementById('btn-close-edit-daily-penalty-modal')?.addEventListener('click', () => {
+    document.getElementById('edit-daily-penalty-modal').style.display = 'none';
   });
 
   // ── Bottom nav search inputs ─────────────────────────────────────────────────
-  document.getElementById('issue-loan-type-select')?.addEventListener('change', updateIssueLoanPreview);
-  document.getElementById('issue-loan-amount')?.addEventListener('input', updateIssueLoanPreview);
-
   document.getElementById('cust-search')?.addEventListener('input', () => renderAdminCustomersList());
   document.getElementById('loans-search')?.addEventListener('input', () => renderAdminLoansLedger());
   document.getElementById('repayments-search')?.addEventListener('input', () => renderAdminRepaymentsLog());
-  document.getElementById('applications-search')?.addEventListener('input', () => renderAdminApplications());
 
 }); // end DOMContentLoaded
 
@@ -374,7 +347,7 @@ async function showAdminPortal() {
   document.getElementById('admin-container').classList.add('active');
   showToast('Welcome back, Administrator.', 'success');
   await setupRealtimeListeners();
-  renderAdminView('all');
+  switchView('admin-view-home');
 }
 
 
@@ -399,21 +372,11 @@ async function setupRealtimeListeners() {
     cache.repayments = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
     refreshCurrentView();
   });
-
-  unsubLoanTypes = onSnapshot(loanTypesCol, snap => {
-    cache.loanTypes = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
-    refreshCurrentView();
-  });
-
-  unsubLoanApps = onSnapshot(loanAppsCol, snap => {
-    cache.loanApplications = snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
-    refreshCurrentView();
-  });
 }
 
 function teardownListeners() {
-  [unsubUsers, unsubLoans, unsubRepayments, unsubLoanTypes, unsubLoanApps].forEach(fn => fn && fn());
-  unsubUsers = unsubLoans = unsubRepayments = unsubLoanTypes = unsubLoanApps = null;
+  [unsubUsers, unsubLoans, unsubRepayments].forEach(fn => fn && fn());
+  unsubUsers = unsubLoans = unsubRepayments = null;
 }
 
 
@@ -507,25 +470,37 @@ function checkForNewOverdueNotifications() {
 // =============================================================================
 // VIEW ROUTING
 // =============================================================================
+let currentViewId = 'admin-view-home';
 
 function switchView(targetViewId) {
+  currentViewId = targetViewId;
+  document.querySelectorAll('#admin-container .app-view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('#admin-container .nav-link').forEach(l => l.classList.remove('active'));
+
   const target = document.getElementById(targetViewId);
-  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (target) target.classList.add('active');
+
+  const link = document.querySelector(`#admin-container [data-target-view="${targetViewId}"]`);
+  if (link) {
+    link.classList.add('active');
+    link.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+
+  renderAdminView(targetViewId);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function refreshCurrentView() {
   if (document.getElementById('admin-container')?.classList.contains('active')) {
-    renderAdminView('all');
+    renderAdminView(currentViewId);
   }
 }
 
 function renderAdminView(viewId) {
-  renderAdminDashboard();
-  renderAdminCustomersList();
-  renderAdminLoansLedger();
-  renderAdminPaymentsPortal();
-  renderAdminApplications();
-  renderAdminLoanTypes();
+  if (viewId === 'admin-view-home')          renderAdminDashboard();
+  else if (viewId === 'admin-view-customers')    renderAdminCustomersList();
+  else if (viewId === 'admin-view-loans')        renderAdminLoansLedger();
+  else if (viewId === 'admin-view-payments')     renderAdminPaymentsPortal();
 }
 
 
@@ -668,8 +643,6 @@ async function downloadBackup() {
       users:            cache.users,
       loans:            cache.loans,
       repayments:       cache.repayments,
-      loanTypes:        cache.loanTypes,
-      loanApplications: cache.loanApplications,
       admins
     };
 
@@ -709,9 +682,7 @@ async function restoreFromBackup(file) {
   const collectionsMap = {
     users:            usersCol,
     loans:            loansCol,
-    repayments:       repaymentsCol,
-    loanTypes:        loanTypesCol,
-    loanApplications: loanAppsCol
+    repayments:       repaymentsCol
   };
 
   const summary = Object.keys(collectionsMap)
@@ -826,11 +797,11 @@ function downloadPDFReport() {
   doc.text('Client Portfolio', 14, y); y += 3;
   doc.autoTable({
     startY: y,
-    head: [['ID', 'Name', 'Phone', 'National ID', 'Loans', 'Penalty', 'Limit']],
+    head: [['Name', 'Phone', 'National ID', 'Loans', 'Penalty']],
     body: cache.users.map(c => {
       const cLoans = cache.loans.filter(l => l.customerId === c.id);
       const penalty = cLoans.reduce((s, l) => s + (l.penaltyAccrued || 0), 0);
-      return [c.id, c.name, c.phone, c.nationalId || '-', cLoans.length, penalty > 0 ? formatCurrency(penalty) : '-', formatCurrency(c.limit)];
+      return [c.name, c.phone, c.nationalId || '-', cLoans.length, penalty > 0 ? formatCurrency(penalty) : '-'];
     }),
     styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [37, 99, 235] },
@@ -858,26 +829,6 @@ function downloadPDFReport() {
       margin: { left: 14 }
     });
     y = doc.lastAutoTable.finalY + 10;
-  }
-
-  // ── LOAN APPLICATIONS TABLE ──
-  if (cache.loanApplications.length > 0) {
-    addPageIfNeeded(20);
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Loan Applications', 14, y); y += 3;
-    doc.autoTable({
-      startY: y,
-      head: [['App ID', 'Client', 'Type', 'Amount', 'Status', 'Date']],
-      body: cache.loanApplications.map(a => {
-        const c = cache.users.find(u => u.id === a.customerId);
-        return [a.id, c ? c.name : a.customerId, a.loanTypeName || '-', formatCurrency(a.amount), a.status || 'pending', formatDate(a.dateApplied)];
-      }),
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [37, 99, 235] },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      margin: { left: 14 }
-    });
   }
 
   // Footer on every page
@@ -1179,13 +1130,6 @@ function renderAdminDashboard() {
 // =============================================================================
 // CUSTOMERS
 // =============================================================================
-function wireSliders() {
-  const editSlider = document.getElementById('edit-cust-limit');
-  const editVal    = document.getElementById('edit-cust-limit-val');
-  if (editSlider && editVal) {
-    editSlider.addEventListener('input', () => { editVal.textContent = formatCurrency(editSlider.value); });
-  }
-}
 
 function wireAddCustomerForm() {
   const form = document.getElementById('admin-add-customer-form');
@@ -1193,68 +1137,95 @@ function wireAddCustomerForm() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name      = document.getElementById('cust-name').value.trim();
-    const phone     = document.getElementById('cust-phone').value.trim();
-    let   customId  = document.getElementById('cust-id').value.trim();
-    const nationalId= document.getElementById('cust-national-id').value.trim();
-    const pin       = document.getElementById('cust-pin').value;
-    const limit     = parseInt(document.getElementById('cust-limit').value);
+    const name           = document.getElementById('cust-name').value.trim();
+    const phone          = document.getElementById('cust-phone').value.trim();
+    const nationalId     = document.getElementById('cust-national-id').value.trim();
+    const loanAmount     = parseFloat(document.getElementById('cust-loan-amount').value);
+    const interestRate   = parseFloat(document.getElementById('cust-interest-rate').value);
+    const repaymentPeriod = parseInt(document.getElementById('cust-repayment-period').value);
+    const periodUnit     = document.getElementById('cust-period-unit').value;
+    const issueDateStr   = document.getElementById('cust-issue-date').value;
+    const dueDateStr     = document.getElementById('cust-due-date').value;
+    const penaltyAmt     = parseFloat(document.getElementById('cust-penalty-amount').value) || 0;
 
-    if (!customId) customId = String(Math.floor(10000000 + Math.random() * 90000000));
-
-    if (pin.length < 4 || pin.length > 8 || isNaN(Number(pin))) {
-      showToast('PIN must be a 4-8 digit numerical code.', 'error');
+    if (!loanAmount || loanAmount <= 0) {
+      showToast('Please enter a valid loan amount.', 'error');
+      return;
+    }
+    if (isNaN(interestRate) || interestRate < 0) {
+      showToast('Please enter a valid interest rate.', 'error');
+      return;
+    }
+    if (!repaymentPeriod || repaymentPeriod <= 0) {
+      showToast('Please enter a valid repayment period.', 'error');
+      return;
+    }
+    if (!issueDateStr || !dueDateStr) {
+      showToast('Please select an issue date.', 'error');
       return;
     }
 
-    // Check duplicate in Firestore
-    const dup = cache.users.find(c => c.id === customId);
-    if (dup) { showToast('Duplicate ID: Customer already registered.', 'error'); return; }
+    const issueDateMs = new Date(issueDateStr).getTime();
+    const dueDateMs   = new Date(dueDateStr).getTime();
+    const customerId  = 'C-' + Math.floor(100000 + Math.random() * 900000);
+    const newLoanId   = 'L-' + Math.floor(100000 + Math.random() * 900000);
+    const interestDecimal = interestRate / 100;
+    const totalRepayable  = parseFloat((loanAmount * (1 + interestDecimal)).toFixed(2));
 
     const btn = form.querySelector('button[type="submit"]');
     btn.disabled = true;
-    btn.querySelector('span').textContent = 'Registering…';
+    btn.querySelector('span').textContent = 'Creating Borrower…';
 
     try {
-      await setDoc(doc(db, 'users', customId), {
-        id:         customId,
+      const batch = writeBatch(db);
+
+      // Create user document
+      batch.set(doc(db, 'users', customerId), {
+        id:         customerId,
         name,
         phone,
         nationalId: nationalId || '',
-        pin,
-        limit,
         dateAdded:  Date.now()
       });
-      showToast(`Customer registered successfully with ID: ${customId}`, 'success');
 
-      const formEl = document.getElementById('admin-add-customer-form');
-      const successScreen = document.getElementById('borrower-reg-success');
-      const successId = document.getElementById('borrower-reg-success-id');
-      if (formEl) formEl.style.display = 'none';
-      if (successId) successId.textContent = `${name} — ID: ${customId}`;
-      if (successScreen) successScreen.style.display = 'flex';
+      // Create loan document
+      batch.set(doc(db, 'loans', newLoanId), {
+        id:              newLoanId,
+        customerId:      customerId,
+        loanTypeName:    'Custom Loan',
+        amount:          loanAmount,
+        term:            repaymentPeriod,
+        termUnit:        periodUnit,
+        purpose:         'admin-issued',
+        interestRate:    interestDecimal,
+        totalRepayable,
+        remainingAmount: totalRepayable,
+        status:          'active',
+        dateCreated:     Date.now(),
+        disbursedAt:     issueDateMs,
+        dueDate:         dueDateMs,
+        issuedByAdmin:   true,
+        penaltyType:     penaltyAmt > 0 ? 'daily' : 'none',
+        penaltyAmount:   penaltyAmt,
+        penaltyAccrued:  0,
+        penaltyApplied:  false,
+        lastPenaltyDate: null
+      });
 
-      const doneBtn = document.getElementById('borrower-reg-done-btn');
-      const issueLoanBtn = document.getElementById('borrower-reg-issue-loan-btn');
-      const newDoneHandler = () => {
-        document.getElementById('add-borrower-modal').style.display = 'none';
-        doneBtn?.removeEventListener('click', newDoneHandler);
-      };
-      const newIssueHandler = () => {
-        document.getElementById('add-borrower-modal').style.display = 'none';
-        openIssueLoanModal(customId);
-        issueLoanBtn?.removeEventListener('click', newIssueHandler);
-      };
-      doneBtn?.removeEventListener('click', newDoneHandler);
-      issueLoanBtn?.removeEventListener('click', newIssueHandler);
-      doneBtn?.addEventListener('click', newDoneHandler);
-      issueLoanBtn?.addEventListener('click', newIssueHandler);
-      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [successScreen] });
+      await batch.commit();
+
+      showToast(`Borrower ${name} created and loan ${newLoanId} issued successfully.`, 'success');
+      form.reset();
+      // Reset issue date to today
+      const issueDateEl = document.getElementById('cust-issue-date');
+      if (issueDateEl) issueDateEl.value = new Date().toISOString().split('T')[0];
+      const previewEl = document.getElementById('cust-loan-preview');
+      if (previewEl) previewEl.style.display = 'none';
     } catch (err) {
-      showToast('Error registering customer: ' + err.message, 'error');
+      showToast('Error creating borrower: ' + err.message, 'error');
     } finally {
       btn.disabled = false;
-      btn.querySelector('span').textContent = 'Register Borrower';
+      btn.querySelector('span').textContent = 'Create Borrower';
     }
   });
 }
@@ -1287,14 +1258,14 @@ function renderAdminCustomersList() {
   const query = (document.getElementById('cust-search')?.value || '').toLowerCase().trim();
 
   const filtered = cache.users.filter(c => {
-    const matchesSearch = c.name?.toLowerCase().includes(query) || c.id?.toLowerCase().includes(query);
+    const matchesSearch = c.name?.toLowerCase().includes(query) || c.phone?.toLowerCase().includes(query) || c.nationalId?.toLowerCase().includes(query);
     if (!matchesSearch) return false;
     if (activeCustFilter === 'all') return true;
     return getCustomerStatus(c.id) === activeCustFilter;
   });
 
   if (filtered.length === 0) {
-    listBody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No matching customers found.</td></tr>`;
+    listBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">No matching customers found.</td></tr>`;
     return;
   }
 
@@ -1311,26 +1282,45 @@ function renderAdminCustomersList() {
     else                       loansBadge = `<span class="loan-count-badge none">No loans</span>`;
 
     const totalPenalty = custLoans.reduce((sum, l) => sum + (l.penaltyAccrued || 0), 0);
-    const penaltyCell  = totalPenalty > 0
-      ? `<span class="loan-count-badge overdue">${formatCurrency(totalPenalty)}</span>`
-      : `<span class="text-muted">—</span>`;
+    const activeLoans  = custLoans.filter(l => l.status === 'active' || l.status === 'overdue');
+    const dailyRate    = activeLoans.reduce((sum, l) => sum + (l.penaltyAmount || 0), 0);
+
+    let penaltyCell = `<span class="text-muted">—</span>`;
+    if (totalPenalty > 0 && dailyRate > 0) {
+      penaltyCell = `<span class="loan-count-badge overdue">${formatCurrency(totalPenalty)} accrued</span> <span class="loan-count-badge active" style="font-size:0.75em;">+KSh ${dailyRate}/day</span>`;
+    } else if (totalPenalty > 0) {
+      penaltyCell = `<span class="loan-count-badge overdue">${formatCurrency(totalPenalty)}</span>`;
+    } else if (dailyRate > 0) {
+      penaltyCell = `<span class="loan-count-badge active">KSh ${dailyRate}/day</span>`;
+    }
+
+    const hasPaidLoans = paidCount > 0 && activeCount === 0 && overdueCount === 0;
+    const renewBtn = hasPaidLoans
+      ? `<button class="btn-action-icon btn-action-renew" data-renew-loan-cust-id="${c.id}" title="Renew Loan" style="color: var(--color-success);">
+           <i data-lucide="refresh-cw"></i>
+         </button>`
+      : '';
+
+    const hasActiveLoans = activeCount > 0 || overdueCount > 0;
+    const editPenaltyBtn = hasActiveLoans
+      ? `<button class="btn-action-icon btn-action-penalty" data-edit-daily-penalty-cust-id="${c.id}" title="Edit Daily Penalty" style="color: #b45309;">
+           <i data-lucide="timer"></i>
+         </button>`
+      : '';
 
     return `
       <tr>
-        <td class="font-mono"><strong>${c.id}</strong></td>
         <td>${c.name}</td>
         <td>${c.phone}</td>
         <td class="font-mono">${c.nationalId || '<span class="text-muted">—</span>'}</td>
         <td>${loansBadge}</td>
         <td>${penaltyCell}</td>
-        <td><strong>${formatCurrency(c.limit)}</strong></td>
         <td>${formatDate(c.dateAdded)}</td>
         <td>
           <div class="actions-cell-group">
-            <button class="btn-action-icon btn-action-issue" data-issue-loan-cust-id="${c.id}" title="Issue Loan to Client">
-              <i data-lucide="banknote"></i>
-            </button>
-            <button class="btn-action-icon btn-action-penalty" data-adjust-penalty-cust-id="${c.id}" title="Increase Penalty">
+            ${renewBtn}
+            ${editPenaltyBtn}
+            <button class="btn-action-icon btn-action-penalty" data-adjust-penalty-cust-id="${c.id}" title="Add Manual Penalty">
               <i data-lucide="alert-triangle"></i>
             </button>
             <button class="btn-action-icon btn-action-edit" data-edit-cust-id="${c.id}" title="Edit Customer Details">
@@ -1350,12 +1340,16 @@ function renderAdminCustomersList() {
 
 function bindCustomerActionListeners() {
   const editModal    = document.getElementById('edit-customer-modal');
-  const editSlider   = document.getElementById('edit-cust-limit');
-  const editLimitVal = document.getElementById('edit-cust-limit-val');
 
-  document.querySelectorAll('[data-issue-loan-cust-id]').forEach(btn => {
+  document.querySelectorAll('[data-renew-loan-cust-id]').forEach(btn => {
     btn.addEventListener('click', () => {
-      openIssueLoanModal(btn.getAttribute('data-issue-loan-cust-id'));
+      openRenewLoanModal(btn.getAttribute('data-renew-loan-cust-id'));
+    });
+  });
+
+  document.querySelectorAll('[data-edit-daily-penalty-cust-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openEditDailyPenaltyModal(btn.getAttribute('data-edit-daily-penalty-cust-id'));
     });
   });
 
@@ -1375,12 +1369,6 @@ function bindCustomerActionListeners() {
       document.getElementById('edit-cust-name').value      = customer.name;
       document.getElementById('edit-cust-phone').value     = customer.phone;
       document.getElementById('edit-cust-national-id').value = customer.nationalId || '';
-      document.getElementById('edit-cust-pin').value       = customer.pin;
-
-      if (editSlider) {
-        editSlider.value = customer.limit;
-        if (editLimitVal) editLimitVal.textContent = formatCurrency(customer.limit);
-      }
       editModal.style.display = 'flex';
     });
   });
@@ -1403,9 +1391,6 @@ function bindCustomerActionListeners() {
         cache.repayments.filter(r => r.customerId === id)
           .forEach(r => batch.delete(doc(db, 'repayments', r.id)));
 
-        cache.loanApplications.filter(a => a.customerId === id)
-          .forEach(a => batch.delete(doc(db, 'loanApplications', a.id)));
-
         await batch.commit();
         showToast(`Customer ${customer.name} and all associated records deleted.`, 'success');
       } catch (err) {
@@ -1425,16 +1410,9 @@ function wireEditCustomerModal() {
     const name      = document.getElementById('edit-cust-name').value.trim();
     const phone     = document.getElementById('edit-cust-phone').value.trim();
     const nationalId= document.getElementById('edit-cust-national-id').value.trim();
-    const pin       = document.getElementById('edit-cust-pin').value;
-    const limit     = parseInt(document.getElementById('edit-cust-limit').value);
-
-    if (pin.length < 4 || pin.length > 8 || isNaN(Number(pin))) {
-      showToast('PIN must be a 4-8 digit numerical code.', 'error');
-      return;
-    }
 
     try {
-      await updateDoc(doc(db, 'users', id), { name, phone, nationalId, pin, limit });
+      await updateDoc(doc(db, 'users', id), { name, phone, nationalId });
       showToast(`Customer ${name} updated successfully.`, 'success');
       document.getElementById('edit-customer-modal').style.display = 'none';
     } catch (err) {
@@ -1455,162 +1433,310 @@ function openAddBorrowerModal() {
   const modal = document.getElementById('add-borrower-modal');
   if (!modal) return;
   const form = document.getElementById('admin-add-customer-form');
-  const successScreen = document.getElementById('borrower-reg-success');
   if (form) {
     form.reset();
-    document.getElementById('cust-limit').value = 5000;
-    form.style.display = '';
+    const issueDateEl = document.getElementById('cust-issue-date');
+    if (issueDateEl) issueDateEl.value = new Date().toISOString().split('T')[0];
+    const dueDateEl = document.getElementById('cust-due-date');
+    if (dueDateEl) dueDateEl.value = '';
+    const previewEl = document.getElementById('cust-loan-preview');
+    if (previewEl) previewEl.style.display = 'none';
+    const penaltyEl = document.getElementById('cust-penalty-amount');
+    if (penaltyEl) penaltyEl.value = '';
   }
-  if (successScreen) successScreen.style.display = 'none';
   modal.style.display = 'flex';
   if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [modal] });
 }
 
+function wireAddBorrowerFormPreview() {
+  const issueDateEl = document.getElementById('cust-issue-date');
+  const dueDateEl   = document.getElementById('cust-due-date');
+  const periodInput = document.getElementById('cust-repayment-period');
+  const unitSelect  = document.getElementById('cust-period-unit');
+  const amountEl    = document.getElementById('cust-loan-amount');
+  const rateEl      = document.getElementById('cust-interest-rate');
+  const previewEl   = document.getElementById('cust-loan-preview');
 
-// =============================================================================
-// ISSUE DIRECT LOAN (Admin-initiated, bypasses client application)
-// =============================================================================
-function openIssueLoanModal(custId) {
-  const modal      = document.getElementById('issue-loan-modal');
-  const typeSelect = document.getElementById('issue-loan-type-select');
-  const custSelect = document.getElementById('issue-loan-cust-select');
-  const custGroup  = document.getElementById('issue-loan-client-group');
-  const custHidden = document.getElementById('issue-loan-cust-id');
-  if (!modal || !typeSelect) return;
-
-  const customer = custId ? cache.users.find(c => c.id === custId) : null;
-
-  if (customer) {
-    custHidden.value = custId;
-    if (custGroup) custGroup.style.display = 'none';
-    document.getElementById('issue-loan-client-desc').textContent =
-      `Issue a new loan for ${customer.name} (${custId}). Borrow limit: ${formatCurrency(customer.limit)}.`;
-  } else {
-    custHidden.value = '';
-    if (custGroup) custGroup.style.display = 'block';
-    if (custSelect) {
-      custSelect.innerHTML = '<option value="" disabled selected>Choose a client...</option>';
-      cache.users.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.id;
-        opt.textContent = `${c.name} (${c.id}) — Limit: ${formatCurrency(c.limit)}`;
-        custSelect.appendChild(opt);
-      });
+  function recalcDueDate() {
+    if (!issueDateEl?.value || !periodInput?.value || !unitSelect?.value) {
+      if (dueDateEl) dueDateEl.value = '';
+      if (previewEl) previewEl.style.display = 'none';
+      return;
     }
-    document.getElementById('issue-loan-client-desc').textContent =
-      'Select a client and disburse a new loan directly.';
+    const issueDate = new Date(issueDateEl.value);
+    const period    = parseInt(periodInput.value);
+    const unit      = unitSelect.value;
+    const due       = new Date(issueDate);
+
+    if (unit === 'days') {
+      due.setDate(due.getDate() + period);
+    } else if (unit === 'weeks') {
+      due.setDate(due.getDate() + (period * 7));
+    } else {
+      due.setMonth(due.getMonth() + period);
+    }
+
+    if (dueDateEl) dueDateEl.value = due.toISOString().split('T')[0];
+
+    const amount = parseFloat(amountEl?.value);
+    const rate   = parseFloat(rateEl?.value);
+    if (amount > 0 && !isNaN(rate) && previewEl) {
+      const total = parseFloat((amount * (1 + rate / 100)).toFixed(2));
+      document.getElementById('preview-principal').textContent = formatCurrency(amount);
+      document.getElementById('preview-total').textContent     = formatCurrency(total);
+      document.getElementById('preview-due-date').textContent  = due.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      previewEl.style.display = 'flex';
+      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [previewEl] });
+    }
   }
 
-  typeSelect.innerHTML = '<option value="" disabled selected>Choose a loan type...</option>';
-  cache.loanTypes.forEach(lt => {
-    const opt = document.createElement('option');
-    opt.value = lt.id;
-    opt.textContent = `${lt.name} (${lt.term} mo. • ${lt.interestRate}%)`;
-    typeSelect.appendChild(opt);
-  });
+  if (issueDateEl) issueDateEl.addEventListener('change', recalcDueDate);
+  if (periodInput) periodInput.addEventListener('input', recalcDueDate);
+  if (unitSelect)  unitSelect.addEventListener('change', recalcDueDate);
+  if (amountEl)    amountEl.addEventListener('input', recalcDueDate);
+  if (rateEl)      rateEl.addEventListener('input', recalcDueDate);
+}
 
-  document.getElementById('issue-loan-amount').value = '';
-  document.getElementById('issue-loan-preview').style.display = 'none';
-  document.getElementById('issue-loan-limit-hint').textContent = 'Select a loan type to continue.';
+
+// =============================================================================
+// RENEW LOAN
+// =============================================================================
+function openRenewLoanModal(custId) {
+  const modal = document.getElementById('renew-loan-modal');
+  if (!modal) return;
+  const customer = cache.users.find(c => c.id === custId);
+  if (!customer) return;
+
+  document.getElementById('renew-loan-cust-id').value = custId;
+  document.getElementById('renew-loan-cust-name').value = customer.name;
+  document.getElementById('renew-loan-client-desc').textContent =
+    `Issue a renewed loan for ${customer.name}. Previous loan has been fully paid.`;
+
+  const form = document.getElementById('admin-renew-loan-form');
+  if (form) {
+    // Keep the cust-id and cust-name, reset everything else
+    document.getElementById('renew-loan-amount').value = '';
+    document.getElementById('renew-interest-rate').value = '';
+    document.getElementById('renew-repayment-period').value = '';
+    document.getElementById('renew-period-unit').value = 'months';
+    document.getElementById('renew-issue-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('renew-due-date').value = '';
+    document.getElementById('renew-loan-preview').style.display = 'none';
+    document.getElementById('renew-penalty-amount').value = '';
+  }
 
   modal.style.display = 'flex';
   if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [modal] });
 }
 
-function updateIssueLoanPreview() {
-  const typeSelect = document.getElementById('issue-loan-type-select');
-  const amountEl   = document.getElementById('issue-loan-amount');
-  const hintEl      = document.getElementById('issue-loan-limit-hint');
-  const preview     = document.getElementById('issue-loan-preview');
-  const totalEl     = document.getElementById('issue-loan-total-value');
-  const dueEl       = document.getElementById('issue-loan-due-value');
+function wireRenewLoanForm() {
+  // Wire due date preview listeners
+  const issueDateEl = document.getElementById('renew-issue-date');
+  const dueDateEl   = document.getElementById('renew-due-date');
+  const periodInput = document.getElementById('renew-repayment-period');
+  const unitSelect  = document.getElementById('renew-period-unit');
+  const amountEl    = document.getElementById('renew-loan-amount');
+  const rateEl      = document.getElementById('renew-interest-rate');
+  const previewEl   = document.getElementById('renew-loan-preview');
 
-  const loanType = cache.loanTypes.find(lt => lt.id === typeSelect?.value);
-  const amount   = parseFloat(amountEl?.value);
+  function recalcDueDate() {
+    if (!issueDateEl?.value || !periodInput?.value || !unitSelect?.value) {
+      if (dueDateEl) dueDateEl.value = '';
+      if (previewEl) previewEl.style.display = 'none';
+      return;
+    }
+    const issueDate = new Date(issueDateEl.value);
+    const period    = parseInt(periodInput.value);
+    const unit      = unitSelect.value;
+    const due       = new Date(issueDate);
 
-  if (!loanType) {
-    if (hintEl) hintEl.textContent = 'Select a loan type to continue.';
-    if (preview) preview.style.display = 'none';
-    return;
+    if (unit === 'days') {
+      due.setDate(due.getDate() + period);
+    } else if (unit === 'weeks') {
+      due.setDate(due.getDate() + (period * 7));
+    } else {
+      due.setMonth(due.getMonth() + period);
+    }
+
+    if (dueDateEl) dueDateEl.value = due.toISOString().split('T')[0];
+
+    const amount = parseFloat(amountEl?.value);
+    const rate   = parseFloat(rateEl?.value);
+    if (amount > 0 && !isNaN(rate) && previewEl) {
+      const total = parseFloat((amount * (1 + rate / 100)).toFixed(2));
+      document.getElementById('renew-preview-principal').textContent = formatCurrency(amount);
+      document.getElementById('renew-preview-total').textContent     = formatCurrency(total);
+      document.getElementById('renew-preview-due-date').textContent  = due.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      previewEl.style.display = 'flex';
+      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [previewEl] });
+    }
   }
 
-  if (hintEl) hintEl.textContent = `${loanType.term}-month term at ${loanType.interestRate}% interest.`;
+  if (issueDateEl) issueDateEl.addEventListener('change', recalcDueDate);
+  if (periodInput) periodInput.addEventListener('input', recalcDueDate);
+  if (unitSelect)  unitSelect.addEventListener('change', recalcDueDate);
+  if (amountEl)    amountEl.addEventListener('input', recalcDueDate);
+  if (rateEl)      rateEl.addEventListener('input', recalcDueDate);
 
-  if (!amount || amount <= 0) {
-    if (preview) preview.style.display = 'none';
-    return;
-  }
-
-  const total   = parseFloat((amount * (1 + loanType.interestRate / 100)).toFixed(2));
-  const dueDate = calcDueDate(loanType.term);
-
-  if (totalEl) totalEl.textContent = formatCurrency(total);
-  if (dueEl)   dueEl.textContent   = formatDate(dueDate);
-  if (preview) preview.style.display = 'flex';
-}
-
-function wireIssueLoanModal() {
-  document.getElementById('btn-close-issue-loan-modal')?.addEventListener('click', () => {
-    document.getElementById('issue-loan-modal').style.display = 'none';
-  });
-
-  const form = document.getElementById('admin-issue-loan-form');
+  // Wire form submission
+  const form = document.getElementById('admin-renew-loan-form');
   if (!form) return;
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const custId         = document.getElementById('renew-loan-cust-id').value;
+    const loanAmount     = parseFloat(document.getElementById('renew-loan-amount').value);
+    const interestRate   = parseFloat(document.getElementById('renew-interest-rate').value);
+    const repaymentPeriod = parseInt(document.getElementById('renew-repayment-period').value);
+    const periodUnit     = document.getElementById('renew-period-unit').value;
+    const issueDateStr   = document.getElementById('renew-issue-date').value;
+    const dueDateStr     = document.getElementById('renew-due-date').value;
+    const penaltyAmt     = parseFloat(document.getElementById('renew-penalty-amount').value) || 0;
 
-    let custId    = document.getElementById('issue-loan-cust-id').value;
-    if (!custId) custId = document.getElementById('issue-loan-cust-select').value;
-    const typeId    = document.getElementById('issue-loan-type-select').value;
-    const amount    = parseFloat(document.getElementById('issue-loan-amount').value);
-    const loanType  = cache.loanTypes.find(lt => lt.id === typeId);
-    const customer  = cache.users.find(c => c.id === custId);
+    if (!loanAmount || loanAmount <= 0) {
+      showToast('Please enter a valid loan amount.', 'error');
+      return;
+    }
+    if (isNaN(interestRate) || interestRate < 0) {
+      showToast('Please enter a valid interest rate.', 'error');
+      return;
+    }
+    if (!repaymentPeriod || repaymentPeriod <= 0) {
+      showToast('Please enter a valid repayment period.', 'error');
+      return;
+    }
+    if (!issueDateStr || !dueDateStr) {
+      showToast('Please select an issue date.', 'error');
+      return;
+    }
 
-    if (!customer) { showToast('Please select a client.', 'error'); return; }
-    if (!loanType) { showToast('Please select a valid loan type.', 'error'); return; }
-    if (!amount || amount <= 0) { showToast('Please enter a valid disbursement amount.', 'error'); return; }
+    const customer = cache.users.find(c => c.id === custId);
+    if (!customer) { showToast('Customer not found.', 'error'); return; }
 
-    const interestRate   = loanType.interestRate / 100;
-    const totalRepayable = parseFloat((amount * (1 + interestRate)).toFixed(2));
-    const dueDate        = calcDueDate(loanType.term);
-    const newLoanId       = 'L-' + Math.floor(100000 + Math.random() * 900000);
+    const issueDateMs      = new Date(issueDateStr).getTime();
+    const dueDateMs        = new Date(dueDateStr).getTime();
+    const newLoanId        = 'L-' + Math.floor(100000 + Math.random() * 900000);
+    const interestDecimal  = interestRate / 100;
+    const totalRepayable   = parseFloat((loanAmount * (1 + interestDecimal)).toFixed(2));
 
-    const btn = document.getElementById('btn-submit-issue-loan');
+    const btn = form.querySelector('button[type="submit"]');
     btn.disabled = true;
-    btn.querySelector('span').textContent = 'Issuing…';
+    btn.querySelector('span').textContent = 'Issuing Loan…';
 
     try {
       await setDoc(doc(db, 'loans', newLoanId), {
         id:              newLoanId,
         customerId:      custId,
-        loanTypeName:    loanType.name,
-        amount,
-        term:            loanType.term,
-        purpose:         'admin-issued',
-        interestRate,
+        loanTypeName:    'Renewed Loan',
+        amount:          loanAmount,
+        term:            repaymentPeriod,
+        termUnit:        periodUnit,
+        purpose:         'renewed',
+        interestRate:    interestDecimal,
         totalRepayable,
         remainingAmount: totalRepayable,
         status:          'active',
         dateCreated:     Date.now(),
-        disbursedAt:     Date.now(),
-        dueDate,
+        disbursedAt:     issueDateMs,
+        dueDate:         dueDateMs,
         issuedByAdmin:   true,
-        penaltyType:     loanType.penaltyType || 'none',
-        penaltyAmount:   loanType.penaltyAmount || 0,
+        penaltyType:     penaltyAmt > 0 ? 'daily' : 'none',
+        penaltyAmount:   penaltyAmt,
         penaltyAccrued:  0,
         penaltyApplied:  false,
         lastPenaltyDate: null
       });
 
-      showToast(`Loan ${newLoanId} issued to ${customer.name}.`, 'success');
-      document.getElementById('issue-loan-modal').style.display = 'none';
-      form.reset();
+      showToast(`Renewed loan ${newLoanId} issued to ${customer.name}.`, 'success');
+      document.getElementById('renew-loan-modal').style.display = 'none';
     } catch (err) {
-      showToast('Error issuing loan: ' + err.message, 'error');
+      showToast('Error issuing renewed loan: ' + err.message, 'error');
     } finally {
       btn.disabled = false;
-      btn.querySelector('span').textContent = 'Issue Loan';
+      btn.querySelector('span').textContent = 'Issue Renewed Loan';
+    }
+  });
+}
+
+
+// =============================================================================
+// EDIT DAILY PENALTY AMOUNT ON ACTIVE LOANS
+// =============================================================================
+function openEditDailyPenaltyModal(custId) {
+  const modal      = document.getElementById('edit-daily-penalty-modal');
+  const loanSelect = document.getElementById('edit-daily-penalty-loan-select');
+  const hintEl     = document.getElementById('edit-daily-penalty-loan-hint');
+  const custHidden = document.getElementById('edit-daily-penalty-cust-id');
+  if (!modal || !loanSelect) return;
+
+  const customer = custId ? cache.users.find(c => c.id === custId) : null;
+  if (!customer) return;
+
+  custHidden.value = custId;
+  document.getElementById('edit-daily-penalty-client-desc').textContent =
+    `Change the daily penalty amount for ${customer.name}'s active loans.`;
+
+  const custLoans = cache.loans.filter(l =>
+    l.customerId === custId && (l.status === 'active' || l.status === 'overdue')
+  );
+
+  loanSelect.innerHTML = '<option value="" disabled selected>Choose a loan...</option>';
+  custLoans.forEach(l => {
+    const opt = document.createElement('option');
+    opt.value = l.id;
+    opt.textContent = `${l.id} — ${formatCurrency(l.remainingAmount)} outstanding (${l.status}) | Current: KSh ${l.penaltyAmount || 0}/day`;
+    loanSelect.appendChild(opt);
+  });
+
+  if (hintEl) hintEl.textContent = custLoans.length === 0
+    ? 'No active or overdue loans for this client.'
+    : '';
+
+  loanSelect.onchange = () => {
+    const loan = cache.loans.find(l => l.id === loanSelect.value);
+    const amtInput = document.getElementById('edit-daily-penalty-amount');
+    if (loan && amtInput) {
+      amtInput.value = loan.penaltyAmount || 0;
+    }
+  };
+
+  document.getElementById('edit-daily-penalty-amount').value = '';
+  modal.style.display = 'flex';
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [modal] });
+}
+
+function wireEditDailyPenaltyModal() {
+  const form = document.getElementById('admin-edit-daily-penalty-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const loanId      = document.getElementById('edit-daily-penalty-loan-select').value;
+    const penaltyAmt  = parseFloat(document.getElementById('edit-daily-penalty-amount').value);
+
+    if (!loanId) { showToast('Please select a loan.', 'error'); return; }
+    if (isNaN(penaltyAmt) || penaltyAmt < 0) { showToast('Please enter a valid penalty amount.', 'error'); return; }
+
+    const loan = cache.loans.find(l => l.id === loanId);
+    if (!loan) { showToast('Loan not found.', 'error'); return; }
+
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.querySelector('span').textContent = 'Saving…';
+
+    try {
+      await updateDoc(doc(db, 'loans', loanId), {
+        penaltyType:   penaltyAmt > 0 ? 'daily' : 'none',
+        penaltyAmount: penaltyAmt
+      });
+
+      showToast(`Daily penalty updated to KSh ${penaltyAmt}/day for loan ${loanId}.`, 'success');
+      document.getElementById('edit-daily-penalty-modal').style.display = 'none';
+    } catch (err) {
+      showToast('Error updating penalty: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Save Penalty';
     }
   });
 }
@@ -1954,384 +2080,4 @@ function renderAdminRepaymentsLog() {
       </div>`;
   }).join('');
   if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-
-// =============================================================================
-// LOAN APPLICATIONS
-// =============================================================================
-let activeAppFilter = 'all';
-
-function wireAppFilters() {
-  document.querySelectorAll('[data-app-filter]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-app-filter]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeAppFilter = btn.getAttribute('data-app-filter');
-      renderAdminApplications();
-    });
-  });
-}
-
-function renderAdminApplications() {
-  const tbody = document.getElementById('admin-applications-table-body');
-  if (!tbody) return;
-
-  const query = (document.getElementById('applications-search')?.value || '').toLowerCase().trim();
-
-  const filtered = cache.loanApplications.filter(app => {
-    const client = cache.users.find(c => c.id === app.customerId);
-    const name   = client ? client.name.toLowerCase() : '';
-    const matchesSearch = app.id?.toLowerCase().includes(query) || name.includes(query);
-    if (!matchesSearch) return false;
-    if (activeAppFilter === 'all') return true;
-    return app.status === activeAppFilter;
-  });
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No applications found.</td></tr>`;
-    return;
-  }
-
-  const sorted = [...filtered].sort((a, b) => tsToMs(b.appliedAt) - tsToMs(a.appliedAt));
-
-  tbody.innerHTML = sorted.map(app => {
-    const client   = cache.users.find(c => c.id === app.customerId);
-    const name     = client ? client.name : `Client ID ${app.customerId}`;
-    const loanType = cache.loanTypes.find(lt => lt.id === app.loanTypeId);
-    const typeName = loanType ? loanType.name : (app.loanTypeName || 'N/A');
-
-    let statusPill;
-    if (app.status === 'approved')
-      statusPill = `<span class="status-pill paid">Approved</span>`;
-    else if (app.status === 'declined')
-      statusPill = `<span class="status-pill" style="background:rgba(239,68,68,0.1);color:var(--danger-color);">Declined</span>`;
-    else
-      statusPill = `<span class="status-pill" style="background:rgba(234,179,8,0.1);color:#b45309;">Pending</span>`;
-
-    return `
-      <tr>
-        <td class="font-mono"><strong>${app.id}</strong></td>
-        <td>${name}</td>
-        <td>${typeName}</td>
-        <td>${formatCurrency(app.amount)}</td>
-        <td>${app.term} mo.</td>
-        <td>${formatDate(app.appliedAt)}</td>
-        <td>${statusPill}</td>
-        <td><button class="btn-action-icon btn-action-edit" data-review-app-id="${app.id}" title="Review">
-          <i data-lucide="edit-3"></i></button></td>
-      </tr>`;
-  }).join('');
-
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-  bindApplicationActionListeners();
-}
-
-function bindApplicationActionListeners() {
-  document.querySelectorAll('[data-review-app-id]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const appId = btn.getAttribute('data-review-app-id');
-      const app   = cache.loanApplications.find(a => a.id === appId);
-      if (!app) return;
-
-      const client = cache.users.find(c => c.id === app.customerId);
-      const name   = client ? client.name : app.customerId;
-
-      document.getElementById('app-status-loan-id').value          = appId;
-      document.getElementById('app-status-modal-title').textContent = `Review: ${app.id}`;
-      document.getElementById('app-status-modal-desc').textContent  = `Client: ${name} — ${formatCurrency(app.amount)} for ${app.term} months`;
-      document.getElementById('app-status-reason').value            = app.statusReason || '';
-
-      const disbursalInput = document.getElementById('app-disbursal-amount');
-      if (disbursalInput) disbursalInput.value = '';
-
-      if (app.status === 'approved' && app.loanId) {
-        const existingLoan = cache.loans.find(l => l.id === app.loanId);
-        if (existingLoan && disbursalInput) disbursalInput.value = existingLoan.amount.toFixed(2);
-      }
-
-      const radio = document.querySelector(`input[name="app-status-choice"][value="${app.status}"]`);
-      if (radio) radio.checked = true;
-      else document.querySelectorAll('input[name="app-status-choice"]').forEach(r => r.checked = false);
-
-      updateDisbursalSection();
-      document.getElementById('app-status-modal').style.display = 'flex';
-    });
-  });
-}
-
-function wireAppStatusModal() {
-  const btn = document.getElementById('btn-submit-app-status');
-  if (!btn) return;
-
-  btn.addEventListener('click', async () => {
-    const appId       = document.getElementById('app-status-loan-id').value;
-    const reason      = document.getElementById('app-status-reason').value.trim();
-    const statusChoice= document.querySelector('input[name="app-status-choice"]:checked');
-
-    if (!statusChoice) { showToast('Please select Approve or Decline.', 'error'); return; }
-
-    const newStatus = statusChoice.value;
-    const app = cache.loanApplications.find(a => a.id === appId);
-    if (!app) return;
-
-    const appRef = doc(db, 'loanApplications', appId);
-    const updates = { status: newStatus, statusReason: reason, reviewedAt: Date.now() };
-
-    if (newStatus === 'approved') {
-      const disbursalInput = document.getElementById('app-disbursal-amount');
-      const disbursedAmt   = parseFloat(disbursalInput?.value || '');
-
-      if (!disbursedAmt || disbursedAmt <= 0) {
-        showToast('Please enter the disbursed amount sent to the client.', 'error');
-        return;
-      }
-
-      const loanType     = cache.loanTypes.find(lt => lt.id === app.loanTypeId);
-      const interestRate = loanType ? (loanType.interestRate / 100) : (app.interestRate || 0);
-      const totalRepayable = parseFloat((disbursedAmt * (1 + interestRate)).toFixed(2));
-      const dueDate        = calcDueDate(app.term);
-
-      btn.disabled = true;
-      btn.textContent = 'Saving…';
-
-      try {
-        const batch = writeBatch(db);
-
-        const penaltyType   = loanType ? (loanType.penaltyType || 'none') : 'none';
-        const penaltyAmount = loanType ? (loanType.penaltyAmount || 0) : 0;
-
-        if (app.loanId) {
-          // Update existing loan
-          batch.update(doc(db, 'loans', app.loanId), {
-            amount: disbursedAmt,
-            totalRepayable,
-            remainingAmount: totalRepayable,
-            dueDate,
-            status: 'active',
-            term: app.term,
-            interestRate,
-            disbursedAt: Date.now(),
-            penaltyType,
-            penaltyAmount,
-            penaltyAccrued: 0,
-            penaltyApplied: false,
-            lastPenaltyDate: null
-          });
-        } else {
-          // Create new loan
-          const newLoanId = 'L-' + Math.floor(100000 + Math.random() * 900000);
-          batch.set(doc(db, 'loans', newLoanId), {
-            id:              newLoanId,
-            customerId:      app.customerId,
-            applicationId:   app.id,
-            loanTypeName:    loanType ? loanType.name : (app.loanTypeName || 'Loan'),
-            amount:          disbursedAmt,
-            term:            app.term,
-            purpose:         app.purpose || 'general',
-            interestRate,
-            totalRepayable,
-            remainingAmount: totalRepayable,
-            status:          'active',
-            dateCreated:     Date.now(),
-            disbursedAt:     Date.now(),
-            dueDate,
-            penaltyType,
-            penaltyAmount,
-            penaltyAccrued:  0,
-            penaltyApplied:  false,
-            lastPenaltyDate: null
-          });
-          updates.loanId = newLoanId;
-        }
-
-        batch.update(appRef, updates);
-        await batch.commit();
-
-        showToast(`Application ${appId} approved. Loan created with ${app.term}-month term.`, 'success');
-        document.getElementById('app-status-modal').style.display = 'none';
-      } catch (err) {
-        showToast('Error processing approval: ' + err.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Save Status';
-      }
-    } else {
-      // Decline path
-      btn.disabled = true;
-      btn.textContent = 'Saving…';
-      try {
-        await updateDoc(appRef, updates);
-        showToast(`Application ${appId} marked as ${newStatus}.`, newStatus === 'declined' ? 'error' : 'success');
-        document.getElementById('app-status-modal').style.display = 'none';
-      } catch (err) {
-        showToast('Error updating status: ' + err.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Save Status';
-      }
-    }
-  });
-}
-
-function calcDueDate(termMonths) {
-  const d = new Date();
-  d.setMonth(d.getMonth() + termMonths);
-  return d.getTime();
-}
-
-function updateDisbursalSection() {
-  const disburseSection  = document.getElementById('app-disbursal-section');
-  const dueDatePreview   = document.getElementById('app-due-date-preview');
-  const dueDateValue     = document.getElementById('app-due-date-value');
-  const dueDateTermLabel = document.getElementById('app-due-date-term-label');
-  const disbursalInput   = document.getElementById('app-disbursal-amount');
-  const hintEl           = document.getElementById('app-disbursal-hint');
-
-  const isApprove = document.querySelector('input[name="app-status-choice"]:checked')?.value === 'approved';
-  if (!disburseSection) return;
-
-  if (isApprove) {
-    disburseSection.style.display = 'flex';
-    if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [disburseSection] });
-
-    const appId = document.getElementById('app-status-loan-id').value;
-    const app   = cache.loanApplications.find(a => a.id === appId);
-    if (app && dueDateValue && dueDateTermLabel) {
-      const dueTs = calcDueDate(app.term);
-      dueDateValue.textContent     = formatDate(dueTs);
-      dueDateTermLabel.textContent = `(${app.term}-month term)`;
-      if (dueDatePreview) dueDatePreview.style.display = 'block';
-    }
-    if (disbursalInput && hintEl && app) {
-      disbursalInput.placeholder = app.amount.toFixed(2);
-      hintEl.textContent = `Requested: ${formatCurrency(app.amount)}. Enter the exact amount physically sent to the client.`;
-    }
-  } else {
-    disburseSection.style.display = 'none';
-    if (dueDatePreview) dueDatePreview.style.display = 'none';
-  }
-}
-
-
-// =============================================================================
-// LOAN TYPES
-// =============================================================================
-function updateLoanTypePenaltyFields() {
-  const choice   = document.querySelector('input[name="lt-penalty-type"]:checked')?.value || 'none';
-  const group    = document.getElementById('lt-penalty-amount-group');
-  const label    = document.getElementById('lt-penalty-amount-label');
-  const hint     = document.getElementById('lt-penalty-amount-hint');
-  const amountEl = document.getElementById('lt-penalty-amount');
-  if (!group) return;
-
-  if (choice === 'none') {
-    group.style.display = 'none';
-    if (amountEl) amountEl.required = false;
-  } else {
-    group.style.display = 'block';
-    if (amountEl) amountEl.required = true;
-    if (choice === 'daily') {
-      if (label) label.textContent = 'Daily Penalty Amount (KSh)';
-      if (hint)  hint.textContent  = 'Charged every day the loan stays overdue, until fully cleared.';
-    } else {
-      if (label) label.textContent = 'One-Time Penalty Amount (KSh)';
-      if (hint)  hint.textContent  = 'Charged once, the moment a loan of this type becomes overdue.';
-    }
-  }
-}
-
-function wireAddLoanTypeForm() {
-  const form = document.getElementById('admin-add-loan-type-form');
-  if (!form) return;
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const name = document.getElementById('lt-name').value.trim();
-    const term = parseInt(document.getElementById('lt-term').value);
-    const rate = parseFloat(document.getElementById('lt-interest').value);
-    const desc = document.getElementById('lt-desc').value.trim();
-    const penaltyType   = document.querySelector('input[name="lt-penalty-type"]:checked')?.value || 'none';
-    const penaltyAmount = penaltyType === 'none' ? 0 : parseFloat(document.getElementById('lt-penalty-amount').value);
-
-    if (!name || isNaN(term) || isNaN(rate)) {
-      showToast('Please fill in all required fields.', 'error');
-      return;
-    }
-
-    if (penaltyType !== 'none' && (isNaN(penaltyAmount) || penaltyAmount <= 0)) {
-      showToast('Please enter a valid penalty amount.', 'error');
-      return;
-    }
-
-    const newId = 'LT-' + Math.floor(100 + Math.random() * 900);
-    try {
-      await setDoc(doc(db, 'loanTypes', newId), {
-        id: newId, name, term, interestRate: rate, description: desc,
-        penaltyType, penaltyAmount: penaltyAmount || 0
-      });
-      showToast(`Loan type "${name}" added successfully.`, 'success');
-      form.reset();
-      updateLoanTypePenaltyFields();
-    } catch (err) {
-      showToast('Error adding loan type: ' + err.message, 'error');
-    }
-  });
-}
-
-function renderAdminLoanTypes() {
-  const list = document.getElementById('admin-loan-types-list');
-  if (!list) return;
-
-  if (cache.loanTypes.length === 0) {
-    list.innerHTML = `
-      <div class="empty-state">
-        <i data-lucide="package"></i>
-        <p>No loan types configured yet.</p>
-      </div>`;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-    return;
-  }
-
-  list.innerHTML = cache.loanTypes.map(lt => {
-    let penaltyText = 'No penalty';
-    if (lt.penaltyType === 'daily') penaltyText = `${formatCurrency(lt.penaltyAmount || 0)}/day penalty until cleared`;
-    else if (lt.penaltyType === 'flat') penaltyText = `${formatCurrency(lt.penaltyAmount || 0)} one-time penalty`;
-
-    return `
-    <div class="repay-log-item" style="align-items:flex-start;gap:8px;">
-      <div style="flex:1;">
-        <span class="repay-log-title">${lt.name}</span>
-        <span class="repay-log-meta" style="display:block;">
-          ${lt.term} months &bull; ${lt.interestRate}% interest${lt.description ? ' &bull; ' + lt.description : ''}
-        </span>
-        <span class="repay-log-meta" style="display:block; color:${lt.penaltyType && lt.penaltyType !== 'none' ? 'var(--color-danger)' : 'inherit'};">
-          ${penaltyText}
-        </span>
-      </div>
-      <button class="btn-action-icon btn-action-delete" data-delete-lt-id="${lt.id}" title="Remove Loan Type">
-        <i data-lucide="trash-2"></i>
-      </button>
-    </div>`;
-  }).join('');
-
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-  bindLoanTypeDeleteListeners();
-}
-
-function bindLoanTypeDeleteListeners() {
-  document.querySelectorAll('[data-delete-lt-id]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.getAttribute('data-delete-lt-id');
-      const lt = cache.loanTypes.find(t => t.id === id);
-      if (!lt || !confirm(`Remove loan type "${lt.name}"?`)) return;
-
-      try {
-        await deleteDoc(doc(db, 'loanTypes', id));
-        showToast(`Loan type "${lt.name}" removed.`, 'success');
-      } catch (err) {
-        showToast('Error removing loan type: ' + err.message, 'error');
-      }
-    });
-  });
 }
