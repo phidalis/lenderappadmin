@@ -9,7 +9,7 @@
 //   meta/adminBootstrap   – one-time sentinel { initialized: true, initializedAt, by } written
 //                           alongside the very first (superadmin) admin doc; gates further
 //                           first-run setup attempts once it exists.
-//   users/{userId}        – client accounts { name, phone, nationalId, dateAdded }
+//   users/{userId}        – client accounts { name, phone, nationalId, pin, dateAdded }
 //   loans/{loanId}        – loan records
 //   repayments/{repId}    – repayment logs
 
@@ -39,6 +39,7 @@ import {
   onSnapshot,
   serverTimestamp,
   writeBatch,
+  runTransaction,
   Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -78,6 +79,23 @@ const loansCol        = collection(db, 'loans');
 const repaymentsCol   = collection(db, 'repayments');
 const adminsCol       = collection(db, 'admins');
 const bootstrapRef    = doc(db, 'meta', 'adminBootstrap');
+const countersCol     = collection(db, 'counters');
+
+// ── Sequential ID Generator ──────────────────────────────────────────────────
+// Uses a counter document per collection to issue IDs: 1000, 1001, 1002, ...
+async function getNextId(collectionName, prefix) {
+  const counterRef = doc(db, 'counters', collectionName);
+  return runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(counterRef);
+    let current = 999;
+    if (snap.exists()) {
+      current = snap.data().current || 999;
+    }
+    const next = current + 1;
+    transaction.set(counterRef, { current: next }, { merge: true });
+    return prefix + next;
+  });
+}
 
 // ── In-memory cache (refreshed from Firestore on each view switch) ────────────
 const cache = {
@@ -1167,8 +1185,6 @@ function wireAddCustomerForm() {
 
     const issueDateMs = new Date(issueDateStr).getTime();
     const dueDateMs   = new Date(dueDateStr).getTime();
-    const customerId  = 'C-' + Math.floor(100000 + Math.random() * 900000);
-    const newLoanId   = 'L-' + Math.floor(100000 + Math.random() * 900000);
     const interestDecimal = interestRate / 100;
     const totalRepayable  = parseFloat((loanAmount * (1 + interestDecimal)).toFixed(2));
 
@@ -1177,6 +1193,8 @@ function wireAddCustomerForm() {
     btn.querySelector('span').textContent = 'Creating Borrower…';
 
     try {
+      const customerId = await getNextId('users', 'C-');
+      const newLoanId  = await getNextId('loans', 'L-');
       const batch = writeBatch(db);
 
       // Create user document
@@ -1185,6 +1203,8 @@ function wireAddCustomerForm() {
         name,
         phone,
         nationalId: nationalId || '',
+        pin:        '1234',
+        limit:      10000,
         dateAdded:  Date.now()
       });
 
@@ -1615,7 +1635,6 @@ function wireRenewLoanForm() {
 
     const issueDateMs      = new Date(issueDateStr).getTime();
     const dueDateMs        = new Date(dueDateStr).getTime();
-    const newLoanId        = 'L-' + Math.floor(100000 + Math.random() * 900000);
     const interestDecimal  = interestRate / 100;
     const totalRepayable   = parseFloat((loanAmount * (1 + interestDecimal)).toFixed(2));
 
@@ -1624,6 +1643,7 @@ function wireRenewLoanForm() {
     btn.querySelector('span').textContent = 'Issuing Loan…';
 
     try {
+      const newLoanId = await getNextId('loans', 'L-');
       await setDoc(doc(db, 'loans', newLoanId), {
         id:              newLoanId,
         customerId:      custId,
@@ -1684,7 +1704,7 @@ function openEditDailyPenaltyModal(custId) {
   custLoans.forEach(l => {
     const opt = document.createElement('option');
     opt.value = l.id;
-    opt.textContent = `${l.id} — ${formatCurrency(l.remainingAmount)} outstanding (${l.status}) | Current: KSh ${l.penaltyAmount || 0}/day`;
+    opt.textContent = `${customer.name} — ${l.loanTypeName || 'Loan'} (${formatCurrency(l.remainingAmount)} outstanding, ${l.status}) | Current: KSh ${l.penaltyAmount || 0}/day`;
     loanSelect.appendChild(opt);
   });
 
@@ -1769,7 +1789,7 @@ function openAdjustPenaltyModal(custId) {
     custLoans.forEach(l => {
       const opt = document.createElement('option');
       opt.value = l.id;
-      opt.textContent = `${l.id} — ${formatCurrency(l.remainingAmount)} outstanding (${l.status})`;
+      opt.textContent = `${customer.name} — ${l.loanTypeName || 'Loan'} (${formatCurrency(l.remainingAmount)} outstanding, ${l.status})`;
       loanSelect.appendChild(opt);
     });
     if (hintEl) hintEl.textContent = custLoans.length === 0
@@ -1816,7 +1836,9 @@ function wireAdjustPenaltyModal() {
       custLoans.forEach(l => {
         const opt = document.createElement('option');
         opt.value = l.id;
-        opt.textContent = `${l.id} — ${formatCurrency(l.remainingAmount)} outstanding (${l.status})`;
+        const client = cache.users.find(c => c.id === l.customerId);
+        const name = client ? client.name : l.customerId;
+        opt.textContent = `${name} — ${l.loanTypeName || 'Loan'} (${formatCurrency(l.remainingAmount)} outstanding, ${l.status})`;
         loanSelect.appendChild(opt);
       });
       if (hintEl) hintEl.textContent = custLoans.length === 0
@@ -1980,7 +2002,7 @@ function wireRepaymentForm() {
         const newRemaining = Math.max(0, loan.remainingAmount - amount);
         const newStatus    = newRemaining <= 0.01 ? 'paid' : loan.status;
 
-        const repId  = 'R-' + Math.floor(100000 + Math.random() * 900000);
+        const repId  = await getNextId('repayments', 'R-');
         const method = document.querySelector('input[name="admin-pay-method"]:checked')?.value || 'cash';
 
         const batch = writeBatch(db);
